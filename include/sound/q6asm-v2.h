@@ -738,4 +738,9 @@ int q6asm_adjust_session_clock(struct audio_client *ac,
 		uint32_t adjust_time_lsw,
 		uint32_t adjust_time_msw);
 int q6asm_get_svc_version(uint32_t service_id);
+//HTC_AUD_START
+int q6asm_enable_effect(struct audio_client *ac, uint32_t module_id,
+			uint32_t param_id, uint32_t payload_size,
+			void *payload);
+//HTC_AUD_END
 #endif /* __Q6_ASM_H__ */

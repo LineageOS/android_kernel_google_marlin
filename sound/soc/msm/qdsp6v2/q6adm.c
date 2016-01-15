@@ -40,6 +40,15 @@
 #define ULL_SUPPORTED_BITS_PER_SAMPLE 16
 #define ULL_SUPPORTED_SAMPLE_RATE 48000
 
+//HTC_AUD_START
+#undef pr_debug
+#undef pr_info
+#undef pr_err
+#define pr_debug(fmt, ...) pr_aud_debug(fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//HTC_AUD_END
+
 #ifndef CONFIG_DOLBY_DAP
 #undef DOLBY_ADM_COPP_TOPOLOGY_ID
 #define DOLBY_ADM_COPP_TOPOLOGY_ID 0xFFFFFFFE
@@ -324,6 +333,83 @@ done:
 	kfree(ver_info);
 	return ret;
 }
+
+//HTC_AUD_START
+int q6adm_enable_effect(u16 port_id, int copp_idx, uint32_t payload_size, void *payload)
+{
+	u8 *q6_cmd = NULL;
+	struct adm_cmd_set_pp_params_v5 *param;
+	int sz, rc = 0, index;
+
+	//TODO: get copp_idx from parameter
+	pr_info("%s: port id %i, copp idx %i, payload_size = %d\n",
+				__func__, port_id, copp_idx, payload_size);
+
+	port_id = afe_convert_virtual_to_portid(port_id);
+	index = adm_validate_and_get_port_index(port_id);
+
+	if (index < 0 || index >= AFE_MAX_PORTS) {
+		pr_err("%s: invalid port idx %d portid %#x\n",
+			__func__, index, port_id);
+		return -EINVAL;
+	}
+
+	sz = sizeof(struct adm_cmd_set_pp_params_v5) + payload_size;
+	q6_cmd = kzalloc(sz, GFP_KERNEL);
+
+	if (!q6_cmd) {
+		pr_err("%s, adm params memory alloc failed", __func__);
+		return -ENOMEM;
+	}
+
+	memcpy(((u8 *)q6_cmd + sizeof(struct adm_cmd_set_pp_params_v5)),
+			payload, payload_size);
+
+	param = (struct adm_cmd_set_pp_params_v5 *)q6_cmd;
+
+	param->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+	param->hdr.pkt_size = sz;
+	param->hdr.src_svc = APR_SVC_ADM;
+	param->hdr.src_domain = APR_DOMAIN_APPS;
+	param->hdr.src_port = port_id;
+	param->hdr.dest_svc = APR_SVC_ADM;
+	param->hdr.dest_domain = APR_DOMAIN_ADSP;
+	param->hdr.dest_port = atomic_read(&this_adm.copp.id[index][copp_idx]);
+	param->hdr.token = index << 16 | copp_idx;
+	param->hdr.opcode = ADM_CMD_SET_PP_PARAMS_V5;
+	param->payload_addr_lsw = 0;
+	param->payload_addr_msw = 0;
+	param->mem_map_handle = 0;
+	param->payload_size = payload_size;
+
+	atomic_set(&this_adm.copp.stat[index][copp_idx], -1);
+	rc = apr_send_pkt(this_adm.apr, (uint32_t *)q6_cmd);
+	if (rc < 0) {
+		pr_err("%s: Set params failed port = %#x\n",
+			__func__, port_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	/* Wait for the callback */
+
+	rc = wait_event_timeout(this_adm.copp.wait[index][copp_idx],
+			atomic_read(&this_adm.copp.stat[index][copp_idx])>=0,
+			msecs_to_jiffies(TIMEOUT_MS));
+	if (!rc) {
+		pr_err("%s: Set params timed out port = %#x\n",
+			 __func__, port_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	rc = 0;
+fail_cmd:
+	kfree(q6_cmd);
+
+	return rc;
+}
+//HTC_AUD_END
+
 int srs_trumedia_open(int port_id, int copp_idx, __s32 srs_tech_id,
 		      void *srs_params)
 {
@@ -2918,6 +3004,10 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 	} else if (perf_mode == LOW_LATENCY_PCM_MODE) {
 		flags = ADM_LOW_LATENCY_DEVICE_SESSION;
 		if ((topology == DOLBY_ADM_COPP_TOPOLOGY_ID) ||
+//HTC_AUD_START
+		    (topology == HTC_ONEDOTONE_DOLBY_ADM_COPP_TOPOLOGY_ID) ||
+		    (topology == HTC_ADAPTIVE_DOLBY_ADM_COPP_TOPOLOGY_ID) ||
+//HTC_AUD_END
 		    (topology == DS2_ADM_COPP_TOPOLOGY_ID) ||
 		    (topology == SRS_TRUMEDIA_TOPOLOGY_ID))
 			topology = DEFAULT_COPP_TOPOLOGY;

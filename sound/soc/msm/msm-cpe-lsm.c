@@ -131,6 +131,7 @@ struct cpe_lsm_lab {
 	wait_queue_head_t period_wait;
 	struct completion comp;
 	struct completion thread_complete;
+	bool is_buf_allocated;
 };
 
 struct cpe_priv {
@@ -358,6 +359,10 @@ static int msm_cpe_lsm_lab_stop(struct snd_pcm_substream *substream)
 	}
 
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 	afe_ops = &cpe->afe_ops;
 	session = lsm_d->lsm_session;
 	if (rtd->cpu_dai)
@@ -608,6 +613,13 @@ static int msm_cpe_lab_thread(void *data)
 	}
 
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops) {
+		rc = -EINVAL;
+		goto done;
+	}
+//HTC_AUD_END
+
 	afe_ops = &cpe->afe_ops;
 
 	rc = lsm_ops->lab_ch_setup(cpe->core_handle,
@@ -805,6 +817,10 @@ static int msm_cpe_lsm_open(struct snd_pcm_substream *substream)
 	}
 
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 	lsm_d = kzalloc(sizeof(struct cpe_lsm_data), GFP_KERNEL);
 	if (!lsm_d) {
 		dev_err(rtd->dev,
@@ -896,6 +912,10 @@ static int msm_cpe_lsm_close(struct snd_pcm_substream *substream)
 	}
 
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	afe_ops = &cpe->afe_ops;
 	afe_cfg = &(lsm_d->lsm_session->afe_port_cfg);
@@ -1068,6 +1088,10 @@ static int msm_cpe_lsm_ioctl_shared(struct snd_pcm_substream *substream,
 
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	switch (cmd) {
 	case SNDRV_LSM_STOP_LAB:
@@ -1602,6 +1626,10 @@ static int msm_cpe_lsm_lab_start(struct snd_pcm_substream *substream,
 
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 	lab_d = &lsm_d->lab;
 	afe_ops = &cpe->afe_ops;
 	hw_params = &lsm_d->hw_params;
@@ -1719,8 +1747,16 @@ static int msm_cpe_lsm_set_epd(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	if (p_info->param_size != sizeof(epd_thres)) {
 		dev_err(rtd->dev,
@@ -1767,8 +1803,16 @@ static int msm_cpe_lsm_set_mode(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	if (p_info->param_size != sizeof(det_mode)) {
 		dev_err(rtd->dev,
@@ -1815,8 +1859,16 @@ static int msm_cpe_lsm_set_gain(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	if (p_info->param_size != sizeof(gain)) {
 		dev_err(rtd->dev,
@@ -1863,8 +1915,16 @@ static int msm_cpe_lsm_set_conf(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	session->num_confidence_levels =
 			p_info->param_size;
@@ -1906,8 +1966,16 @@ static int msm_cpe_lsm_reg_model(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	lsm_ops->lsm_get_snd_model_offset(cpe->core_handle,
 			session, &offset);
@@ -1979,8 +2047,16 @@ static int msm_cpe_lsm_dereg_model(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	rc = lsm_ops->lsm_set_one_param(cpe->core_handle,
 				session, p_info, NULL,
@@ -2009,8 +2085,16 @@ static int msm_cpe_lsm_set_custom(struct snd_pcm_substream *substream,
 	rtd = substream->private_data;
 	lsm_d = cpe_get_lsm_data(substream);
 	cpe = cpe_get_private_data(substream);
+//HTC_AUD_START klockwork
+	if (!cpe)
+		return -EINVAL;
+//HTC_AUD_END
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	if (p_info->param_size > MSM_CPE_MAX_CUSTOM_PARAM_SIZE) {
 		dev_err(rtd->dev,
@@ -2143,6 +2227,10 @@ static int msm_cpe_lsm_ioctl(struct snd_pcm_substream *substream,
 
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	switch (cmd) {
 	case SNDRV_LSM_REG_SND_MODEL_V2: {
@@ -2470,6 +2558,10 @@ static int msm_cpe_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 
 	session = lsm_d->lsm_session;
 	lsm_ops = &cpe->lsm_ops;
+//HTC_AUD_START klockwork
+	if (!lsm_ops)
+		return -EINVAL;
+//HTC_AUD_END
 
 	switch (cmd) {
 	case SNDRV_LSM_REG_SND_MODEL_V2_32: {

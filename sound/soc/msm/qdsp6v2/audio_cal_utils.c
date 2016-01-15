@@ -911,8 +911,7 @@ int cal_utils_set_cal(size_t data_size, void *data,
 		goto done;
 	}
 
-	if ((data_size > get_user_cal_type_size(
-		cal_type->info.reg.cal_type)) || (data_size < 0)) {
+	if (data_size > get_user_cal_type_size(cal_type->info.reg.cal_type)) { //HTC_AUD klockwork ID: 502
 		pr_err("%s: cal_type %d, data_size of %zd is invalid, expecting %zd!\n",
 			__func__, cal_type->info.reg.cal_type, data_size,
 			get_user_cal_type_size(cal_type->info.reg.cal_type));

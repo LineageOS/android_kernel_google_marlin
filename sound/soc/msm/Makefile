@@ -17,6 +17,9 @@ obj-$(CONFIG_SND_SOC_CPE) += snd-soc-cpe.o
 # for MSM8996 sound card driver
 snd-soc-msm8996-objs := msm8996.o apq8096-auto.o
 obj-$(CONFIG_SND_SOC_MSM8996) += snd-soc-msm8996.o
+#HTC_AUD_START
+obj-$(CONFIG_SND_SOC_MSM8996) += htc_acoustic_alsa.o
+#HTC_AUD_END
 
 # for MSM8996 virtualization sound card driver
 snd-soc-msm8996-vm-objs := apq8096-auto.o

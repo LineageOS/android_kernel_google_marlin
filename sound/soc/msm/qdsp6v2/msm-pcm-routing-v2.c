@@ -48,6 +48,25 @@
 #include "q6voice.h"
 #include "sound/q6lsm.h"
 
+//HTC_AUD_START
+#undef pr_debug
+#undef pr_info
+#undef pr_err
+#define pr_debug(fmt, ...) pr_aud_debug(fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//HTC_AUD_END
+//
+#define INT_RX_VOL_MAX_STEPS 0x2000
+#define INT_RX_VOL_GAIN 0x2000
+static int msm_route_afe_pri_mi2s_vol_control = 0x2000;
+static int msm_route_afe_sec_mi2s_vol_control = 0x2000;
+static int msm_route_afe_tert_mi2s_vol_control = 0x2000;
+static int msm_route_afe_quat_mi2s_vol_control = 0x2000;
+
+static const DECLARE_TLV_DB_LINEAR(afe_mi2s_vol_gain, 0,
+                        INT_RX_VOL_MAX_STEPS);
+
 #ifndef CONFIG_DOLBY_DAP
 #undef DOLBY_ADM_COPP_TOPOLOGY_ID
 #define DOLBY_ADM_COPP_TOPOLOGY_ID 0xFFFFFFFE
@@ -3764,6 +3783,74 @@ static const struct snd_kcontrol_new ec_ref_param_controls[] = {
 	SOC_ENUM_EXT("EC Reference SampleRate", msm_route_ec_ref_params_enum[2],
 		msm_ec_ref_rate_get, msm_ec_ref_rate_put),
 };
+
+static int msm_routing_get_afe_pri_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = msm_route_afe_pri_mi2s_vol_control;
+	return 0;
+}
+
+static int msm_routing_set_afe_pri_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	afe_loopback_gain(AFE_PORT_ID_PRIMARY_MI2S_RX, ucontrol->value.integer.value[0]);
+
+	msm_route_afe_pri_mi2s_vol_control = ucontrol->value.integer.value[0];
+
+	return 0;
+}
+
+static int msm_routing_get_afe_sec_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = msm_route_afe_sec_mi2s_vol_control;
+	return 0;
+}
+
+static int msm_routing_set_afe_sec_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	afe_loopback_gain(AFE_PORT_ID_SECONDARY_MI2S_RX, ucontrol->value.integer.value[0]);
+
+	msm_route_afe_sec_mi2s_vol_control = ucontrol->value.integer.value[0];
+
+	return 0;
+}
+
+static int msm_routing_get_afe_tert_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = msm_route_afe_tert_mi2s_vol_control;
+	return 0;
+}
+
+static int msm_routing_set_afe_tert_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	afe_loopback_gain(AFE_PORT_ID_TERTIARY_MI2S_RX, ucontrol->value.integer.value[0]);
+
+	msm_route_afe_tert_mi2s_vol_control = ucontrol->value.integer.value[0];
+
+	return 0;
+}
+
+static int msm_routing_get_afe_quat_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = msm_route_afe_quat_mi2s_vol_control;
+	return 0;
+}
+
+static int msm_routing_set_afe_quat_mi2s_vol_mixer(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	afe_loopback_gain(AFE_PORT_ID_QUATERNARY_MI2S_RX, ucontrol->value.integer.value[0]);
+
+	msm_route_afe_quat_mi2s_vol_control = ucontrol->value.integer.value[0];
+
+	return 0;
+}
 
 static int msm_routing_ec_ref_rx_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
@@ -11016,6 +11103,10 @@ static const struct snd_kcontrol_new mmul8_mixer_controls[] = {
 	MSM_BACKEND_DAI_SLIMBUS_6_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("AUX_PCM_UL_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_AUXPCM_TX,
+	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("PRI_TDM_TX_0", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_PRI_TDM_TX_0,
 	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
@@ -14169,6 +14260,12 @@ static const struct snd_kcontrol_new quat_mi2s_rx_port_mixer_controls[] = {
 	MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
 	MSM_BACKEND_DAI_SLIMBUS_8_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
+//HTC_AUD_START
+	SOC_DOUBLE_EXT("AUX_PCM_TX", SND_SOC_NOPM,
+        MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
+	MSM_BACKEND_DAI_AUXPCM_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+//HTC_AUD_END
 };
 
 static const struct snd_kcontrol_new pri_tdm_rx_0_port_mixer_controls[] = {
@@ -16129,6 +16226,30 @@ static const struct snd_kcontrol_new aanc_slim_0_rx_mux[] = {
 	SOC_ENUM_EXT("AANC_SLIM_0_RX MUX", aanc_slim_0_rx_enum,
 		msm_routing_slim_0_rx_aanc_mux_get,
 		msm_routing_slim_0_rx_aanc_mux_put)
+};
+
+static const struct snd_kcontrol_new afe_pri_mi2s_vol_mixer_controls[] = {
+	SOC_SINGLE_EXT_TLV("PRI_MI2S_RX Volume", SND_SOC_NOPM, 0,
+	INT_RX_VOL_GAIN, 0, msm_routing_get_afe_pri_mi2s_vol_mixer,
+	msm_routing_set_afe_pri_mi2s_vol_mixer, afe_mi2s_vol_gain),
+};
+
+static const struct snd_kcontrol_new afe_sec_mi2s_vol_mixer_controls[] = {
+	SOC_SINGLE_EXT_TLV("SEC_MI2S_RX Volume", SND_SOC_NOPM, 0,
+	INT_RX_VOL_GAIN, 0, msm_routing_get_afe_sec_mi2s_vol_mixer,
+	msm_routing_set_afe_sec_mi2s_vol_mixer, afe_mi2s_vol_gain),
+};
+
+static const struct snd_kcontrol_new afe_tert_mi2s_vol_mixer_controls[] = {
+	SOC_SINGLE_EXT_TLV("TERT_MI2S_RX Volume", SND_SOC_NOPM, 0,
+	INT_RX_VOL_GAIN, 0, msm_routing_get_afe_tert_mi2s_vol_mixer,
+	msm_routing_set_afe_tert_mi2s_vol_mixer, afe_mi2s_vol_gain),
+};
+
+static const struct snd_kcontrol_new afe_quat_mi2s_vol_mixer_controls[] = {
+	SOC_SINGLE_EXT_TLV("QUAT_MI2S_RX Volume", SND_SOC_NOPM, 0,
+	INT_RX_VOL_GAIN, 0, msm_routing_get_afe_quat_mi2s_vol_mixer,
+	msm_routing_set_afe_quat_mi2s_vol_mixer, afe_mi2s_vol_gain),
 };
 
 static int msm_routing_get_stereo_to_custom_stereo_control(
@@ -19532,6 +19653,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MultiMedia1 Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
 	{"MultiMedia3 Mixer", "AUX_PCM_TX", "AUX_PCM_TX"},
 	{"MultiMedia5 Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
+	{"MultiMedia8 Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
 	{"MultiMedia1 Mixer", "SEC_AUX_PCM_UL_TX", "SEC_AUX_PCM_TX"},
 	{"MultiMedia3 Mixer", "SEC_AUX_PCM_TX", "SEC_AUX_PCM_TX"},
 	{"MultiMedia5 Mixer", "SEC_AUX_PCM_TX", "SEC_AUX_PCM_TX"},
@@ -20744,11 +20866,13 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"INT4_MI2S_RX", NULL, "INT4_MI2S_RX_DL_HL"},
 	{"PRI_MI2S_RX_DL_HL", "Switch", "PRI_MI2S_DL_HL"},
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_RX_DL_HL"},
+	{"SEC_MI2S_RX_DL_HL", "Switch", "SLIM0_DL_HL"}, //HTC_AUD
 	{"SEC_MI2S_RX_DL_HL", "Switch", "SEC_MI2S_DL_HL"},
 	{"SEC_MI2S_RX", NULL, "SEC_MI2S_RX_DL_HL"},
 	{"TERT_MI2S_RX_DL_HL", "Switch", "TERT_MI2S_DL_HL"},
 	{"TERT_MI2S_RX", NULL, "TERT_MI2S_RX_DL_HL"},
 
+	{"QUAT_MI2S_RX_DL_HL", "Switch", "SLIM0_DL_HL"}, //HTC_AUD
 	{"QUAT_MI2S_RX_DL_HL", "Switch", "QUAT_MI2S_DL_HL"},
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX_DL_HL"},
 	{"MI2S_UL_HL", NULL, "TERT_MI2S_TX"},
@@ -21135,6 +21259,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SLIMBUS_0_RX Port Mixer", "SEC_MI2S_TX", "SEC_MI2S_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
+	{"SLIMBUS_0_RX Port Mixer", "PRI_MI2S_RX", "PRI_MI2S_RX"},
+	{"SLIMBUS_0_RX Port Mixer", "SEC_MI2S_RX", "SEC_MI2S_RX"},
+	{"SLIMBUS_0_RX Port Mixer", "TERT_MI2S_RX", "TERT_MI2S_RX"},
+	{"SLIMBUS_0_RX Port Mixer", "QUAT_MI2S_RX", "QUAT_MI2S_RX"},
 	{"SLIMBUS_0_RX Port Mixer", "INTERNAL_BT_SCO_TX", "INT_BT_SCO_TX"},
 	{"SLIMBUS_0_RX", NULL, "SLIMBUS_0_RX Port Mixer"},
 	{"AFE_PCM_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
@@ -21333,6 +21461,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QUAT_MI2S_RX Port Mixer", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
+	{"QUAT_MI2S_RX Port Mixer", "AUX_PCM_TX", "AUX_PCM_TX"}, //HTC_AUD
 	{"QUAT_MI2S_RX Port Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "SLIM_8_TX", "SLIMBUS_8_TX"},
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX Port Mixer"},
@@ -22141,6 +22270,17 @@ static struct snd_pcm_ops msm_routing_pcm_ops = {
 	.prepare        = msm_pcm_routing_prepare,
 };
 
+//HTC_AUD_START
+static int msm_routing_read(struct snd_soc_component *componet,
+	unsigned int reg, unsigned int *val)
+{
+	dev_dbg(componet->dev, "reg %x\n", reg);
+	*val = 0;
+
+	return 0;
+}
+//HTC_AUD_END
+
 /**
  * msm_pcm_routing_set_channel_mixer_runtime - apply channel mixer
  * setting during runtime.
@@ -22361,6 +22501,9 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 {
 	snd_soc_dapm_new_controls(&platform->component.dapm, msm_qdsp6_widgets,
 			   ARRAY_SIZE(msm_qdsp6_widgets));
+//HTC_AUD_START
+	platform->component.read = msm_routing_read;
+//HTC_AUD_END
 	snd_soc_dapm_add_routes(&platform->component.dapm, intercon,
 		ARRAY_SIZE(intercon));
 
@@ -22393,6 +22536,22 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 
 	snd_soc_add_platform_controls(platform, native_mode_controls,
 				ARRAY_SIZE(native_mode_controls));
+
+	snd_soc_add_platform_controls(platform,
+			afe_pri_mi2s_vol_mixer_controls,
+			ARRAY_SIZE(afe_pri_mi2s_vol_mixer_controls));
+
+	snd_soc_add_platform_controls(platform,
+			afe_sec_mi2s_vol_mixer_controls,
+			ARRAY_SIZE(afe_sec_mi2s_vol_mixer_controls));
+
+	snd_soc_add_platform_controls(platform,
+			afe_tert_mi2s_vol_mixer_controls,
+			ARRAY_SIZE(afe_tert_mi2s_vol_mixer_controls));
+
+	snd_soc_add_platform_controls(platform,
+			afe_quat_mi2s_vol_mixer_controls,
+			ARRAY_SIZE(afe_quat_mi2s_vol_mixer_controls));
 
 	msm_qti_pp_add_controls(platform);
 

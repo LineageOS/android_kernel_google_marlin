@@ -1742,7 +1742,7 @@ static int snd_rawmidi_dev_register(struct snd_device *device)
 		}
 	}
 #endif /* CONFIG_SND_OSSEMUL */
-	sprintf(name, "midi%d", rmidi->device);
+	snprintf(name, sizeof(name), "midi%d", rmidi->device);
 	entry = snd_info_create_card_entry(rmidi->card, name, rmidi->card->proc_root);
 	if (entry) {
 		entry->private_data = rmidi;

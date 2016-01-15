@@ -52,6 +52,13 @@ static int snd_ctl_open(struct inode *inode, struct file *file)
 	struct snd_ctl_file *ctl;
 	int i, err;
 
+//HTC_AUD_START
+#ifdef CONFIG_HTC_AUDIO_DEBUG
+	pr_info("[AUD] %s: trigger dump stack for debug\n", __func__);
+	dump_stack();
+#endif
+//HTC_AUD_END
+
 	err = nonseekable_open(inode, file);
 	if (err < 0)
 		return err;
@@ -120,6 +127,13 @@ static int snd_ctl_release(struct inode *inode, struct file *file)
 	struct snd_ctl_file *ctl;
 	struct snd_kcontrol *control;
 	unsigned int idx;
+
+//HTC_AUD_START
+#ifdef CONFIG_HTC_AUDIO_DEBUG
+	pr_info("[AUD] %s: trigger dump stack for debug\n", __func__);
+	dump_stack();
+#endif
+//HTC_AUD_END
 
 	ctl = file->private_data;
 	file->private_data = NULL;

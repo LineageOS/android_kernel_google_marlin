@@ -22,3 +22,8 @@ obj-y += audio_calibration.o audio_cal_utils.o q6adm.o q6afe.o q6asm.o \
 	msm-pcm-q6-noirq.o q6common.o
 ocmem-audio-objs += audio_ocmem.o
 obj-$(CONFIG_AUDIO_OCMEM) += ocmem-audio.o
+#HTC_AUD_START
+ifdef CONFIG_HTC_DEBUG_DSP
+CFLAGS_msm-compress-q6-v2.o :=-DDEBUG
+endif
+#HTC_AUD_END

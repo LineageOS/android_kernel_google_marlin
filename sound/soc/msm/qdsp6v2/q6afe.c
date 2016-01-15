@@ -31,6 +31,16 @@
 #include <sound/q6core.h>
 
 #define WAKELOCK_TIMEOUT	5000
+
+//HTC_AUD_START
+#undef pr_debug
+#undef pr_info
+#undef pr_err
+#define pr_debug(fmt, ...) pr_aud_debug(fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//HTC_AUD_END
+
 enum {
 	AFE_COMMON_RX_CAL = 0,
 	AFE_COMMON_TX_CAL,
@@ -4030,7 +4040,7 @@ int afe_loopback(u16 enable, u16 rx_port, u16 tx_port)
 	param_hdr.param_size = sizeof(struct afe_loopback_cfg_v1);
 
 	lb_param.dst_port_id = rx_port;
-	lb_param.routing_mode = LB_MODE_DEFAULT;
+	lb_param.routing_mode = LB_MODE_EC_REF_VOICE_AUDIO;
 	lb_param.enable = (enable ? 1 : 0);
 	lb_param.loopback_cfg_minor_version = AFE_API_VERSION_LOOPBACK_CONFIG;
 

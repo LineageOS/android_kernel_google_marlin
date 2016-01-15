@@ -94,6 +94,11 @@ struct msm_pcm_channel_mixer {
 	int override_cfg;
 };
 
+//HTC_AUD_START
+#define HTC_ONEDOTONE_DOLBY_ADM_COPP_TOPOLOGY_ID     0x10000001
+#define HTC_ADAPTIVE_DOLBY_ADM_COPP_TOPOLOGY_ID      0x10000004
+//HTC_AUD_END
+
 int srs_trumedia_open(int port_id, int copp_idx, __s32 srs_tech_id,
 		      void *srs_params);
 
@@ -224,4 +229,9 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 			struct msm_pcm_channel_mixer *ch_mixer,
 			int channel_index);
 void adm_set_native_mode(int mode);
+
+//HTC_AUD_START
+int q6adm_enable_effect(u16 port_id, int copp_idx, uint32_t payload_size, void *payload);
+//HTC_AUD_END
+
 #endif /* __Q6_ADM_V2_H__ */

@@ -372,20 +372,28 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	msm_adsp_init_mixer_ctl_pp_event_queue(substream->private_data);
 
 	mutex_unlock(&pcm->lock);
-
-	return 0;
+done:
+	return ret;
 }
 
 static void stop_pcm(struct msm_pcm_loopback *pcm)
 {
 	struct snd_soc_pcm_runtime *soc_pcm_rx;
 	struct snd_soc_pcm_runtime *soc_pcm_tx;
+	int rc = 0;
 
 	if (pcm->audio_client == NULL)
 		return;
 
 	mutex_lock(&loopback_session_lock);
-	q6asm_cmd(pcm->audio_client, CMD_CLOSE);
+	if (pcm->session_id) {
+		rc = q6asm_cmd(pcm->audio_client, CMD_CLOSE);
+		if (rc < 0) {
+			pr_err("%s: error: ASM close failed returned %d\n",
+				__func__, rc);
+			goto done;
+		}
+	}
 
 	if (pcm->playback_substream != NULL) {
 		soc_pcm_rx = pcm->playback_substream->private_data;
@@ -399,7 +407,10 @@ static void stop_pcm(struct msm_pcm_loopback *pcm)
 	}
 	q6asm_audio_client_free(pcm->audio_client);
 	pcm->audio_client = NULL;
+
+done:
 	mutex_unlock(&loopback_session_lock);
+	return;
 }
 
 static int msm_pcm_close(struct snd_pcm_substream *substream)
@@ -486,15 +497,42 @@ static int msm_pcm_prepare(struct snd_pcm_substream *substream)
 			pcm->capture_substream->private_data;
 		event.event_func = msm_pcm_route_event_handler;
 		event.priv_data = (void *) pcm;
-		msm_pcm_routing_reg_phy_stream(soc_pcm_tx->dai_link->be_id,
+		ret = msm_pcm_routing_reg_phy_stream(soc_pcm_tx->dai_link->be_id,
 			pcm->audio_client->perf_mode,
 			pcm->session_id, pcm->capture_substream->stream);
-		msm_pcm_routing_reg_phy_stream_v2(soc_pcm_rx->dai_link->be_id,
+		if (ret) {
+			pr_err("%s: stream reg tx failed ret:%d\n",
+				__func__, ret);
+			ret = q6asm_cmd(pcm->audio_client, CMD_CLOSE);
+			if (ret < 0) {
+				pr_err("%s: error: ASM close failed returned %d\n",
+					__func__, ret);
+				goto done;
+			}
+			pcm->session_id = 0;
+			goto done;
+		}
+		ret = msm_pcm_routing_reg_phy_stream_v2(soc_pcm_rx->dai_link->be_id,
 			pcm->audio_client->perf_mode,
 			pcm->session_id, pcm->playback_substream->stream,
 			event);
+		if (ret) {
+			pr_err("%s: stream reg rx failed ret:%d\n",
+				__func__, ret);
+			msm_pcm_routing_dereg_phy_stream(
+				soc_pcm_tx->dai_link->be_id,
+				pcm->capture_substream->stream);
+			ret = q6asm_cmd(pcm->audio_client, CMD_CLOSE);
+			if (ret < 0) {
+				pr_err("%s: error: ASM close failed returned %d\n",
+					__func__, ret);
+				goto done;
+			}
+			pcm->session_id = 0;
+		}
 	}
 
+done:
 	mutex_unlock(&pcm->lock);
 
 	return ret;

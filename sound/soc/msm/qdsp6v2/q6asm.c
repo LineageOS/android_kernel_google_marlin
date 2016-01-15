@@ -48,6 +48,15 @@
 #define SESSION_MAX 9
 #define ASM_MAX_CHANNELS 8
 
+//HTC_AUD_START
+#undef pr_debug
+#undef pr_info
+#undef pr_err
+#define pr_debug(fmt, ...) pr_aud_debug(fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//HTC_AUD_END
+
 enum {
 	ASM_TOPOLOGY_CAL = 0,
 	ASM_CUSTOM_TOP_CAL,
@@ -163,6 +172,56 @@ static int in_cont_index;
 static int out_cold_index;
 static char *out_buffer;
 static char *in_buffer;
+
+//HTC_AUD_START
+int q6asm_enable_effect(struct audio_client *ac, uint32_t module_id,
+			uint32_t param_id, uint32_t payload_size,
+			void *payload)
+{
+	int sz = sizeof(struct asm_params) + payload_size, rc = 0;
+	u8 *q6_cmd = (u8*)kzalloc(sz,GFP_KERNEL);
+	struct asm_params *pasm = (struct asm_params*)q6_cmd;
+
+	if (!q6_cmd) {
+		pr_err("%s, q6_cmd memory alloc failed", __func__);
+		return -ENOMEM;
+	}
+
+	q6asm_add_hdr(ac, &pasm->hdr, sz, TRUE);
+
+	pasm->hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	pasm->param.data_payload_addr_lsw = 0;
+	pasm->param.data_payload_addr_msw = 0;
+	pasm->param.mem_map_handle = 0;
+	pasm->param.data_payload_size = sz -
+				sizeof(pasm->hdr) - sizeof(pasm->param);
+	pasm->data.module_id = module_id;
+	pasm->data.param_id = param_id;
+	pasm->data.param_size = payload_size;
+
+	memcpy(q6_cmd + sizeof(struct asm_params),payload,payload_size);
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *)q6_cmd);
+	if (rc < 0) {
+		pr_err("%s: Enable Q6 effect fail\n", __func__);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+	rc = wait_event_timeout(ac->cmd_wait,
+			(atomic_read(&ac->cmd_state) == 0), 5*HZ);
+	if (!rc) {
+		pr_err("%s: timeout in sending command to aprn", __func__);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+	rc = 0;
+fail_cmd:
+	if(q6_cmd)
+		kfree(q6_cmd);
+	return rc;
+}
 
 static uint32_t adsp_reg_event_opcode[] = {
 	ASM_STREAM_CMD_REGISTER_PP_EVENTS,

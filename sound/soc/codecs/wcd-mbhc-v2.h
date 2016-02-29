@@ -264,6 +264,18 @@ struct usbc_ana_audio_config {
 	struct device_node *usbc_force_gpio_p; /* used by pinctrl API */
 };
 
+/* HTC_AUD_START */
+struct uart_cable_pin_t {
+	unsigned int uart_notify_gpio;
+	unsigned int uart_notify_irq;
+	unsigned int uart_irq_trigger_type;
+	bool uart_disable_mbhc_en;
+	bool uart_cable_ins;
+	bool uart_struct_initd;
+	struct snd_soc_codec *codec;
+};
+/* HTC_AUD_END */
+
 struct wcd_mbhc_config {
 	bool read_fw_bin;
 	void *calibration;
@@ -280,6 +292,7 @@ struct wcd_mbhc_config {
 	bool enable_anc_mic_detect;
 	u32 enable_usbc_analog;
 	struct usbc_ana_audio_config usbc_analog_cfg;
+	struct uart_cable_pin_t *puart_handle; /* HTC_AUD */
 };
 
 struct wcd_mbhc_intr {
@@ -394,6 +407,7 @@ struct wcd_mbhc_cb {
 	void (*update_anc_state)(struct snd_soc_codec *codec,
 				 bool enable, int anc_num);
 	bool (*is_anc_on)(struct wcd_mbhc *mbhc);
+	void (*mbhc_disable)(struct snd_soc_codec *); /* HTC_AUD */
 };
 
 struct wcd_mbhc {

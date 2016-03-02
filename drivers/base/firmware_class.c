@@ -313,6 +313,7 @@ static const char * const fw_path[] = {
 	"/lib/firmware/" UTS_RELEASE,
 	"/lib/firmware",
 	"/lib64/firmware",
+        "/firmware/radio",
 	"/firmware/adsp"	//HTC_AUD
 };
 

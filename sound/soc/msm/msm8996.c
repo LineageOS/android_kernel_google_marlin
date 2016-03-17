@@ -363,7 +363,6 @@ static int hdmi_rx_sample_rate = SAMPLING_RATE_48KHZ;
 static bool codec_reg_done;
 
 static const char *const htc_ftm_mode[] = {"Default", "FTM"}; //HTC_AUD
-static const char *const htc_tfa_source_mode[] = {"Second", "Main", "Fail"}; //HTC_AUD
 static const char *const hifi_function[] = {"Off", "On"};
 static const char *const pin_states[] = {"Disable", "active"};
 static const char *const spk_function[] = {"Off", "On"};
@@ -502,14 +501,7 @@ int msm8994_enable_24b_audio(void)
 }
 
 /*HW component start*/
-static int hw_compon = 0;
-static int htc_msm8952_get_hw_component(void)
-{
-	return hw_compon;
-}
-
 static struct acoustic_ops acoustic = {
-	.get_hw_component = htc_msm8952_get_hw_component,
 	.enable_24b_audio = msm8994_enable_24b_audio,
 };
 /*HW component end*/
@@ -645,7 +637,6 @@ struct msm8996_asoc_mach_data {
 	struct snd_info_entry *codec_root;
 //HTC_AUD_START
 	int tfa9888_reset_gpio;
-	int right_speaker_id_gpio;
 //HTC_AUD_END
 };
 
@@ -4924,20 +4915,6 @@ static int msm_htc_ftm_get(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = state;
 	pr_debug("%s: get ftm BT gpio high = %ld\n",
 			 __func__, ucontrol->value.integer.value[0]);
-	return 0;
-}
-
-static int msm_htc_tfa_source_get(struct snd_kcontrol *kcontrol,
-				    struct snd_ctl_elem_value *ucontrol)
-{
-	ucontrol->value.integer.value[0] = right_speaker_id_gpio_val;
-	pr_debug("%s: tfa_source = %d \n", __func__, right_speaker_id_gpio_val);
-	return 0;
-}
-
-static int msm_htc_tfa_source_put(struct snd_kcontrol *kcontrol,
-				    struct snd_ctl_elem_value *ucontrol)
-{
 	return 0;
 }
 
@@ -9487,11 +9464,11 @@ static struct snd_soc_dai_link msm8996_common_be_dai_links[] = {
 		.cpu_dai_name = "msm-dai-q6-mi2s.3",
 		.platform_name = "msm-pcm-routing",
 /* HTC_AUD_START */
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm_htc_mi2s_codec",
+		.codec_name = "tfa98xx.7-0034",
+		.codec_dai_name = "tfa98xx-aif-7-34",
 /*		.codec_name = "snd-soc-dummy",
-		.codec_dai_name = "snd-soc-dummy-dai",
-   HTC_AUD_END */
+		.codec_dai_name = "snd-soc-dummy-dai", */
+/* HTC_AUD_END */
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.be_id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
@@ -10745,8 +10722,10 @@ static int msm8996_asoc_machine_probe(struct platform_device *pdev)
 	char *mclk_freq_prop_name;
 	const struct of_device_id *match;
 	int ret;
-	int tfa9888_dev = 0; //HTC_AUD
-	struct pinctrl *uart_notify_pinctrl = NULL; /* HTC_AUD */
+/* HTC_AUD_START  */
+	struct pinctrl *uart_notify_pinctrl = NULL;
+	int i = 0;
+/* HTC_AUD_END */
 
 //HTC_AUD_START
 	if((apr_get_q6_state() == APR_SUBSYS_LOADED) && card_reg == -1) {
@@ -10825,6 +10804,35 @@ static int msm8996_asoc_machine_probe(struct platform_device *pdev)
 	} else {
 		pr_info("aud,uart-disable-mbhc is not set\n");
 	}
+
+	pdata->tfa9888_reset_gpio = of_get_named_gpio(pdev->dev.of_node,
+							"qcom,tfa9888-reset-gpio", 0);
+	if (pdata->tfa9888_reset_gpio < 0) {
+		dev_info(&pdev->dev, "property %s not detected in node %s\n",
+			"qcom,tfa9888-reset-gpio", pdev->dev.of_node->full_name);
+	} else {
+		dev_info(&pdev->dev, "%s detected %d\n",
+			"qcom,tfa9888-reset-gpio", pdata->tfa9888_reset_gpio);
+		ret = gpio_request(pdata->tfa9888_reset_gpio, "tfa9888_reset_gpio");
+		if (ret < 0) {
+			pr_err("%s: tfa9888_reset_gpio gpio request %d error %d\n",
+				__func__, pdata->tfa9888_reset_gpio, ret);
+		} else {
+			ret = gpio_direction_output(pdata->tfa9888_reset_gpio, 0);
+			pr_info("%s: tfa9888_reset_gpio output low\n", __func__);
+		}
+
+		/* if tfa9888 is exist, apply it */
+		for (i = 0; i < ARRAY_SIZE(msm8996_common_be_dai_links); i++) {
+			if (!strncmp(msm8996_common_be_dai_links[i].name,
+				LPASS_BE_QUAT_MI2S_RX, sizeof(LPASS_BE_QUAT_MI2S_RX))) {
+				msm8996_common_be_dai_links[i].codec_name =
+						"msm-stub-codec.1";
+				msm8996_common_be_dai_links[i].codec_dai_name =
+						"msm_htc_mi2s_codec";
+			}
+		}
+	}
 /* HTC_AUD_END */
 
 	card = populate_snd_card_dailinks(&pdev->dev);
@@ -10886,47 +10894,10 @@ static int msm8996_asoc_machine_probe(struct platform_device *pdev)
 	spdev = pdev;
 
 //HTC_AUD_START
-	pdata->tfa9888_reset_gpio = of_get_named_gpio(pdev->dev.of_node,
-				"qcom,tfa9888-reset-gpio", 0);
-	if (pdata->tfa9888_reset_gpio < 0) {
-		dev_info(&pdev->dev, "property %s not detected in node %s\n",
-			"qcom,tfa9888-reset-gpio",
-			pdev->dev.of_node->full_name);
-	} else {
-		dev_info(&pdev->dev, "%s detected %d\n",
-			"qcom,tfa9888-reset-gpio", pdata->tfa9888_reset_gpio);
-		ret = gpio_request(pdata->tfa9888_reset_gpio, "tfa9888_reset_gpio");
-		if (ret < 0) {
-			pr_err("%s: tfa9888_reset_gpio gpio request %d error %d\n",__func__, pdata->tfa9888_reset_gpio, ret);
-		} else {
-			ret = gpio_direction_output(pdata->tfa9888_reset_gpio, 0);
-			pr_info("%s: tfa9888_reset_gpio output low\n", __func__);
-		}
-	}
-
-	pdata->right_speaker_id_gpio = of_get_named_gpio(pdev->dev.of_node,
-				"qcom,right-speaker-id-gpio", 0);
-	if (pdata->right_speaker_id_gpio < 0) {
-		dev_info(&pdev->dev, "property %s not detected in node %s\n",
-			"qcom,right-speaker-id-gpio",
-			pdev->dev.of_node->full_name);
-	} else {
-		dev_info(&pdev->dev, "%s detected %d\n",
-			"qcom,right-speaker-id-gpio", pdata->right_speaker_id_gpio);
-		ret = gpio_request(pdata->right_speaker_id_gpio, "right_speaker_id_gpio");
-		if (ret < 0) {
-			pr_err("%s: right_speaker_id_gpio gpio request %d error %d\n",__func__, pdata->right_speaker_id_gpio, ret);
-		} else {
-			right_speaker_id_gpio_val = gpio_get_value(pdata->right_speaker_id_gpio);
-			pr_info("%s: right_speaker_id_gpio get value %d\n", __func__, right_speaker_id_gpio_val);
-		}
-	}
-
 	ret = msm8994_init_ftm_btpcm(pdev, &htc_aud_btpcm_config);
 	if (ret < 0) {
 		pr_warn("%s: init ftm btpcm failed with %d (Non-issue for non-BRCM BT chip.)", __func__, ret);
 	}
-
 //HTC_AUD_END
 
 	ret = msm8996_populate_dai_link_component_of_node(card);
@@ -11022,16 +10993,6 @@ static int msm8996_asoc_machine_probe(struct platform_device *pdev)
 //HTC_AUD_START
 	mutex_init(&htc_adaptivesound_enable_mutex);
 
-	ret = of_property_read_u32(pdev->dev.of_node, "htc-tfa9888", &tfa9888_dev);
-	if (ret) {
-		pr_info("%s: Missing htc-tfa9888 in dt node\n", __func__);
-		tfa9888_dev = 0;
-	} else {
-		pr_info("%s: htc-tfa9888 is %s in dt node\n", __func__, tfa9888_dev ? "true" : "false");
-		if (tfa9888_dev) {
-			hw_compon |= HTC_AUDIO_TFA9888;
-		}
-	}
 	htc_acoustic_register_ops(&acoustic);
 //HTC_AUD_END
 	pr_info("%s: probe successfully\n", __func__);
@@ -11060,10 +11021,6 @@ err:
 	if (pdata->tfa9888_reset_gpio > 0) {
 		gpio_free(pdata->tfa9888_reset_gpio);
 		pdata->tfa9888_reset_gpio = 0;
-	}
-	if (pdata->right_speaker_id_gpio > 0) {
-		gpio_free(pdata->right_speaker_id_gpio);
-		pdata->right_speaker_id_gpio = 0;
 	}
 //HTC_AUD_END
 	devm_kfree(&pdev->dev, pdata);

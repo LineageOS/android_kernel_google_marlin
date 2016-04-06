@@ -325,7 +325,11 @@ module_param_named(
 	debug_mask, fg_debug_mask, int, 00600
 );
 
+#ifdef CONFIG_ARCH_MSM8996
+static int fg_reset_on_lockup = 1;
+#else
 static int fg_reset_on_lockup;
+#endif
 
 #ifdef CONFIG_HTC_BATT
 /* Enable batterydebug log*/
@@ -1264,8 +1268,7 @@ static int fg_run_iacs_clear_sequence(struct fg_chip *chip)
 	int rc = 0;
 	u8 temp;
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("Running IACS clear sequence\n");
+	pr_info("Running IACS clear sequence\n");
 
 	/* clear the error */
 	rc = fg_masked_write(chip, chip->mem_base + MEM_INTF_IMA_CFG,
@@ -1302,8 +1305,7 @@ static int fg_run_iacs_clear_sequence(struct fg_chip *chip)
 		return rc;
 	}
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("IACS clear sequence complete!\n");
+	pr_info("IACS clear sequence complete!\n");
 	return rc;
 }
 
@@ -1432,10 +1434,11 @@ static void fg_enable_irqs(struct fg_chip *chip, bool enable)
 static void fg_check_ima_error_handling(struct fg_chip *chip)
 {
 	if (chip->ima_error_handling) {
-		if (fg_debug_mask & FG_STATUS)
-			pr_info("IMA error is handled already!\n");
+		pr_info("IMA error is handled already!\n");
 		return;
 	}
+
+	pr_info("Attempting to Start recovery.\n");
 	mutex_lock(&chip->ima_recovery_lock);
 	fg_enable_irqs(chip, false);
 	chip->use_last_cc_soc = true;
@@ -2032,15 +2035,19 @@ static int fg_backup_sram_registers(struct fg_chip *chip, bool save)
 
 #define SOC_FG_RESET	0xF3
 #define RESET_MASK	(BIT(7) | BIT(5))
+#define SOC_LOW_PWR_CFG 0xF5
 static int fg_reset(struct fg_chip *chip, bool reset)
 {
 	int rc;
+	u8 soc_low_pwr_cfg;
 
 	rc = fg_sec_masked_write(chip, chip->soc_base + SOC_FG_RESET,
 		0xFF, reset ? RESET_MASK : 0, 1);
 	if (rc)
 		pr_err("Error in writing to 0x%x, rc=%d\n", SOC_FG_RESET, rc);
 
+	rc = fg_read(chip, &soc_low_pwr_cfg, chip->soc_base + SOC_LOW_PWR_CFG, 1);
+	pr_info("soc_low_pwr_cfg: 0x%02X\n", soc_low_pwr_cfg);
 	return rc;
 }
 
@@ -8693,6 +8700,7 @@ static void ima_error_recovery_work(struct work_struct *work)
 		fg_relax(&chip->fg_reset_wakeup_source);
 		return;
 	}
+	pr_info("ima_error_recovery_work start\n");
 
 	/*
 	 * SOC should be read and used until the error recovery completes.
@@ -8705,13 +8713,14 @@ static void ima_error_recovery_work(struct work_struct *work)
 	chip->block_sram_access = true;
 
 	/* Release the mutex to avoid deadlock while cancelling the works */
+	pr_info("Cancelling all works, unlocking mutex\n");
 	mutex_unlock(&chip->ima_recovery_lock);
 
 	/* Cancel all the works */
 	fg_cancel_all_works(chip);
+	pr_info("Cancelling all works finished\n");
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("last_soc: %d\n", chip->last_soc);
+	pr_info("last_soc: %d\n", chip->last_soc);
 
 	mutex_lock(&chip->ima_recovery_lock);
 	/* Acquire IMA access forcibly from FG ALG */
@@ -8731,8 +8740,7 @@ static void ima_error_recovery_work(struct work_struct *work)
 		goto out;
 	}
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("resetting FG\n");
+	pr_info("resetting FG\n");
 
 	/* Assert FG reset */
 	rc = fg_reset(chip, true);
@@ -8744,8 +8752,7 @@ static void ima_error_recovery_work(struct work_struct *work)
 	/* Wait for a small time before deasserting FG reset */
 	msleep(100);
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("clearing FG from reset\n");
+	pr_info("clearing FG from reset\n");
 
 	/* Deassert FG reset */
 	rc = fg_reset(chip, false);
@@ -8764,8 +8771,7 @@ static void ima_error_recovery_work(struct work_struct *work)
 		goto wait;
 	}
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("Calling hw_init\n");
+	pr_info("Calling hw_init\n");
 
 	/*
 	 * Once FG is reset, everything in SRAM will be wiped out. Redo
@@ -8778,6 +8784,8 @@ static void ima_error_recovery_work(struct work_struct *work)
 		goto out;
 	}
 
+	pr_info("Calling update_jeita_setting\n");
+
 	update_jeita_setting(&chip->update_jeita_setting.work);
 
 	if (chip->wa_flag & IADC_GAIN_COMP_WA) {
@@ -8786,8 +8794,7 @@ static void ima_error_recovery_work(struct work_struct *work)
 			goto out;
 	}
 
-	if (fg_debug_mask & FG_STATUS)
-		pr_info("loading battery profile\n");
+	pr_info("loading battery profile\n");
 	if (!chip->use_otp_profile) {
 		chip->battery_missing = true;
 		chip->profile_loaded = false;
@@ -8797,6 +8804,7 @@ static void ima_error_recovery_work(struct work_struct *work)
 	}
 
 wait:
+	pr_info("wait_for_completion_interruptible_timeout\n");
 	rc = wait_for_completion_interruptible_timeout(&chip->fg_reset_done,
 			msecs_to_jiffies(FG_RESTART_TIMEOUT_MS));
 
@@ -8833,6 +8841,7 @@ out:
 #endif //CONFIG_HTC_BATT
 	mutex_unlock(&chip->ima_recovery_lock);
 	fg_relax(&chip->fg_reset_wakeup_source);
+	pr_info("ima_error_recovery_work end\n");
 }
 
 #define DIG_MINOR		0x0

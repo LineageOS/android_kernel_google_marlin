@@ -2964,6 +2964,11 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	pinfo->is_dba_panel = of_property_read_bool(np,
 			"qcom,dba-panel");
 
+	ctrl_pdata->dsi_cmd_hs = false;
+	data = of_get_property(np, "qcom,mdss-dsi-default-command-state", NULL);
+	if (data && !strcmp(data, "dsi_hs_mode"))
+		ctrl_pdata->dsi_cmd_hs = true;
+
 	if (pinfo->is_dba_panel) {
 		bridge_chip_name = of_get_property(np,
 			"qcom,bridge-name", &len);

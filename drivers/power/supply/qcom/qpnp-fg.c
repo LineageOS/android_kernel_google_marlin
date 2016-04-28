@@ -37,6 +37,10 @@
 #include <linux/string_helpers.h>
 #include <linux/alarmtimer.h>
 #include <linux/qpnp/qpnp-revid.h>
+#ifdef CONFIG_HTC_BATT
+#include <linux/power/htc_battery.h>
+#include <linux/async.h>
+#endif /* CONFIG_HTC_BATT */
 
 /* Register offsets */
 
@@ -250,7 +254,11 @@ static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
 	SETTING(CHG_TERM_CURRENT, 0x4F8,   2,      250),
 	SETTING(IRQ_VOLT_EMPTY,	 0x458,   3,      3100),
 	SETTING(CUTOFF_VOLTAGE,	 0x40C,   0,      3200),
+#ifdef CONFIG_HTC_BATT
+	SETTING(VBAT_EST_DIFF,	 0x000,   0,      150),
+#else
 	SETTING(VBAT_EST_DIFF,	 0x000,   0,      30),
+#endif /* CONFIG_HTC_BATT */
 	SETTING(DELTA_SOC,	 0x450,   3,      1),
 	SETTING(BATT_LOW,	 0x458,   0,      4200),
 	SETTING(THERM_DELAY,	 0x4AC,   3,      0),
@@ -319,6 +327,11 @@ module_param_named(
 
 static int fg_reset_on_lockup;
 
+#ifdef CONFIG_HTC_BATT
+/* Enable batterydebug log*/
+bool g_fg_flag_enable_batt_debug_log = false;
+#endif
+
 static int fg_sense_type = -EINVAL;
 static int fg_restart;
 
@@ -344,6 +357,10 @@ module_param_named(batt_valid_ocv, fg_batt_valid_ocv, bool, 0600
 static int fg_batt_range_pct;
 module_param_named(batt_range_pct, fg_batt_range_pct, int, 0600
 );
+
+#ifdef CONFIG_HTC_BATT
+static bool g_is_ima_error_handling = false;
+#endif //CONFIG_HTC_BATT
 
 struct fg_irq {
 	int			irq;
@@ -658,6 +675,10 @@ static const mode_t DFS_MODE		= 00600;
 static const char *default_batt_type	= "Unknown Battery";
 static const char *loading_batt_type	= "Loading Battery Data";
 static const char *missing_batt_type	= "Disconnected Battery";
+
+#ifdef CONFIG_HTC_BATT
+static struct fg_chip *the_chip;
+#endif //CONFIG_HTC_BATT
 
 /* Log buffer */
 struct fg_log_buffer {
@@ -1410,6 +1431,9 @@ static void fg_check_ima_error_handling(struct fg_chip *chip)
 	fg_enable_irqs(chip, false);
 	chip->use_last_cc_soc = true;
 	chip->ima_error_handling = true;
+#ifdef CONFIG_HTC_BATT
+	g_is_ima_error_handling = true;
+#endif /* CONFIG_HTC_BATT */
 	if (!work_pending(&chip->ima_error_recovery_work))
 		schedule_work(&chip->ima_error_recovery_work);
 	mutex_unlock(&chip->ima_recovery_lock);
@@ -2231,6 +2255,37 @@ static int get_monotonic_soc_raw(struct fg_chip *chip)
 		pr_info_ratelimited("raw: 0x%02x\n", cap[0]);
 	return cap[0];
 }
+
+#ifdef CONFIG_HTC_BATT
+#define SYSTEM_SOC_ADDR                0x574
+#define SYSTEM_SOC_OFFSET      0
+#define SYSTEM_SOC_SIZE                2
+static int get_system_soc(struct fg_chip *chip)
+{
+	u8 cap[2];
+	int soc;
+	int rc;
+
+	rc = fg_mem_read(chip, cap, SYSTEM_SOC_ADDR, SYSTEM_SOC_SIZE, SYSTEM_SOC_OFFSET, 0);
+	if (rc) {
+		pr_err("fg_mem read failed: addr=%03x, rc=%d\n",
+			SYSTEM_SOC_ADDR, rc);
+		return rc;
+	}
+	soc = ((cap[1] << 8) + cap[0]) * 10000 / 0xffff;
+
+	if (fg_debug_mask & FG_POWER_SUPPLY)
+		pr_info_ratelimited("raw: 0x%02x\n", soc);
+	return soc;
+}
+#endif /* CONFIG_HTC_BATT */
+
+#ifdef CONFIG_HTC_BATT
+bool get_ima_error_status(void)
+{
+	return g_is_ima_error_handling;
+}
+#endif //CONFIG_HTC_BATT
 
 #define EMPTY_CAPACITY		0
 #define DEFAULT_CAPACITY	50
@@ -3443,11 +3498,19 @@ static void fg_cap_learning_work(struct work_struct *work)
 		goto fail;
 	if (!fg_is_temperature_ok_for_learning(chip)) {
 		fg_cap_learning_stop(chip);
+#ifdef CONFIG_HTC_BATT
+		if (chip->wa_flag & USE_CC_SOC_REG)
+			goto wa_use_cc_soc_reg;
+#endif /* CONFIG_HTC_BATT */
 		goto fail;
 	}
 
-	if (chip->wa_flag & USE_CC_SOC_REG)
+	if (chip->wa_flag & USE_CC_SOC_REG) {
+#ifdef CONFIG_HTC_BATT
+wa_use_cc_soc_reg:
+#endif /* CONFIG_HTC_BATT */
 		goto fail;
+	}
 
 	fg_mem_lock(chip);
 
@@ -4663,6 +4726,11 @@ static int fg_power_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_BATTERY_INFO_ID:
 		val->intval = chip->batt_info_id;
 		break;
+#ifdef CONFIG_HTC_BATT
+       case POWER_SUPPLY_PROP_SYSTEM_SOC:
+               val->intval = get_system_soc(chip);
+               break;
+#endif /* CONFIG_HTC_BATT */
 	default:
 		return -EINVAL;
 	}
@@ -4821,6 +4889,31 @@ static int fg_property_is_writeable(struct power_supply *psy,
 	return 0;
 }
 
+
+#ifdef CONFIG_HTC_BATT
+#define DUMP_FG_REG_START	0x4000
+#define DUMP_FG_REG_SIZE		0x500
+void dump_fg_reg(void)
+{
+	u8	reg;
+	int	reg_offset;
+
+	for (reg_offset = 0;reg_offset < DUMP_FG_REG_SIZE; reg_offset++){
+		fg_read(the_chip, &reg, DUMP_FG_REG_START + reg_offset, 1);
+		pr_info("0x%04x: 0x%02X\n", (DUMP_FG_REG_START + reg_offset), reg);
+	}
+}
+
+void force_dump_fg_sram(void)
+{
+	schedule_work(&the_chip->dump_sram);
+}
+#endif //CONFIG_HTC_BATT
+
+#ifdef CONFIG_HTC_BATT
+#define SRAM_DUMP_START_0x0		0x0
+#define SRAM_DUMP_START_0x200	0x200
+#endif //CONFIG_HTC_BATT
 #define SRAM_DUMP_START		0x400
 #define SRAM_DUMP_LEN		0x200
 static void dump_sram(struct work_struct *work)
@@ -4856,6 +4949,36 @@ static void dump_sram(struct work_struct *work)
 				INT_RT_STS(chip->mem_base), rc);
 	else
 		pr_info("memif rt_sts: 0x%x\n", rt_sts);
+
+#ifdef CONFIG_HTC_BATT
+	// dump FG regs
+	dump_fg_reg();
+
+	// dump FG SRAM
+	rc = fg_mem_read(chip, buffer, SRAM_DUMP_START_0x0, SRAM_DUMP_LEN, 0, 0);
+	if (rc) {
+		pr_err("dump failed: rc = %d\n", rc);
+		return;
+	}
+
+	for (i = 0; i < SRAM_DUMP_LEN; i += 4) {
+		str[0] = '\0';
+		fill_string(str, DEBUG_PRINT_BUFFER_SIZE, buffer + i, 4);
+		pr_info("%03X %s\n", SRAM_DUMP_START_0x0 + i, str);
+	}
+
+	rc = fg_mem_read(chip, buffer, SRAM_DUMP_START_0x200, SRAM_DUMP_LEN, 0, 0);
+	if (rc) {
+		pr_err("dump failed: rc = %d\n", rc);
+		return;
+	}
+
+	for (i = 0; i < SRAM_DUMP_LEN; i += 4) {
+		str[0] = '\0';
+		fill_string(str, DEBUG_PRINT_BUFFER_SIZE, buffer + i, 4);
+		pr_info("%03X %s\n", SRAM_DUMP_START_0x200 + i, str);
+	}
+#endif //CONFIG_HTC_BATT
 
 	rc = fg_mem_read(chip, buffer, SRAM_DUMP_START, SRAM_DUMP_LEN, 0, 0);
 	if (rc) {
@@ -6286,6 +6409,16 @@ fail:
 	return -EINVAL;
 }
 
+#ifdef CONFIG_HTC_BATT
+static int __init batt_enable_bms_charger_log_set(char *str)
+{
+    g_fg_flag_enable_batt_debug_log = true;
+    pr_info("flag_enable_batt_debug_log is set\n");
+    return 0;
+}
+__setup("batt_enable_bms_charger_log=1", batt_enable_bms_charger_log_set);
+#endif /* CONFIG_HTC_BATT */
+
 #define FG_PROFILE_LEN			128
 #define PROFILE_COMPARE_LEN		32
 #define THERMAL_COEFF_ADDR		0x444
@@ -6570,6 +6703,16 @@ done:
 	pr_info("Battery SOC: %d, V: %duV\n", get_prop_capacity(chip),
 		fg_data[FG_DATA_VOLTAGE].value);
 	complete_all(&chip->fg_reset_done);
+#ifdef CONFIG_HTC_BATT
+		if (g_fg_flag_enable_batt_debug_log)
+			fg_debug_mask = 0xFF;
+		else
+			fg_debug_mask = 0x04;
+		/* Put here because battery capacity ready when profile loaded done.
+		   here finish after fg_probe done. */
+		htc_battery_probe_process(GAUGE_PROBE_DONE);
+#endif /* CONFIG_HTC_BATT */
+
 	return rc;
 no_profile:
 	chip->soc_reporting_ready = true;
@@ -6584,6 +6727,11 @@ no_profile:
 	if (chip->power_supply_registered)
 		power_supply_changed(chip->bms_psy);
 	fg_relax(&chip->profile_wakeup_source);
+#ifdef CONFIG_HTC_BATT
+	/* Should inform batt_worker fg is ready here, too. */
+	/* Otherwise batt_worker will not work if batt ID is unknown. */
+	htc_battery_probe_process(GAUGE_PROBE_DONE);
+#endif /* CONFIG_HTC_BATT */
 	return rc;
 update:
 	cancel_delayed_work(&chip->update_sram_data);
@@ -8491,6 +8639,7 @@ wait:
 
 	if (fg_debug_mask & FG_STATUS)
 		pr_info("IMA error recovery done...\n");
+
 out:
 	fg_restore_soc(chip);
 	fg_restore_cc_soc(chip);
@@ -8498,8 +8647,11 @@ out:
 	update_sram_data_work(&chip->update_sram_data.work);
 	update_temp_data(&chip->update_temp_work.work);
 	schedule_delayed_work(&chip->check_sanity_work,
-		msecs_to_jiffies(1000));
+			msecs_to_jiffies(1000));
 	chip->ima_error_handling = false;
+#ifdef CONFIG_HTC_BATT
+	g_is_ima_error_handling = false;
+#endif //CONFIG_HTC_BATT
 	mutex_unlock(&chip->ima_recovery_lock);
 	fg_relax(&chip->fg_reset_wakeup_source);
 }
@@ -8741,6 +8893,7 @@ static int fg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&chip->batt_profile_init, batt_profile_init);
 	INIT_DELAYED_WORK(&chip->check_sanity_work, check_sanity_work);
 	INIT_WORK(&chip->ima_error_recovery_work, ima_error_recovery_work);
+	INIT_DELAYED_WORK(&chip->check_sanity_work, check_sanity_work);
 	INIT_WORK(&chip->rslow_comp_work, rslow_comp_work);
 	INIT_WORK(&chip->fg_cap_learning_work, fg_cap_learning_work);
 	INIT_WORK(&chip->dump_sram, dump_sram);
@@ -8914,6 +9067,10 @@ static int fg_probe(struct platform_device *pdev)
 		chip->revision[DIG_MAJOR], chip->revision[DIG_MINOR],
 		chip->revision[ANA_MAJOR], chip->revision[ANA_MINOR],
 		chip->pmic_subtype);
+
+#ifdef CONFIG_HTC_BATT
+	the_chip = chip;
+#endif //CONFIG_HTC_BATT
 
 	return rc;
 
@@ -9180,11 +9337,22 @@ static struct platform_driver fg_driver = {
 	.shutdown	= fg_shutdown,
 };
 
+#ifdef CONFIG_HTC_BATT
+static void __init fg_init_async(void *unused, async_cookie_t cookie)
+{
+	spmi_driver_register(&fg_driver);
+}
+static int __init fg_init(void)
+{
+	async_schedule(fg_init_async, NULL);
+	return 0;
+}
+#else
 static int __init fg_init(void)
 {
 	return platform_driver_register(&fg_driver);
 }
-
+#endif /* CONFIG_HTC_BATT */
 static void __exit fg_exit(void)
 {
 	return platform_driver_unregister(&fg_driver);

@@ -394,6 +394,11 @@ struct dsi_err_container {
 	s64 err_time[MAX_ERR_INDEX];
 };
 
+struct dsi_cmd_pos {
+	int line;
+	int offset;
+};
+
 #define DSI_CTRL_LEFT		DSI_CTRL_0
 #define DSI_CTRL_RIGHT		DSI_CTRL_1
 #define DSI_CTRL_CLK_SLAVE	DSI_CTRL_RIGHT
@@ -592,6 +597,7 @@ struct mdss_dsi_ctrl_pdata {
 
 	bool phy_power_off;
 	bool dsi_cmd_hs;
+	struct dsi_cmd_pos lp_off_pos;
 };
 
 struct dsi_status_data {

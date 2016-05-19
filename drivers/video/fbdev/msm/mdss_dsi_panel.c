@@ -759,6 +759,11 @@ end:
 	return 0;
 }
 
+#define CHANGE_CMD_DATA(cmds,pos,value)	\
+	do {	\
+		cmds[pos.line].payload[pos.offset] = value;	\
+	} while(0)
+
 static int mdss_dsi_panel_apply_display_setting(struct mdss_panel_data *pdata,
 							u32 mode)
 {
@@ -782,8 +787,10 @@ static int mdss_dsi_panel_apply_display_setting(struct mdss_panel_data *pdata,
 			(lp_on_cmds->cmd_cnt))
 		mdss_dsi_panel_apply_settings(ctrl, lp_on_cmds);
 	else if ((mode == MDSS_PANEL_LOW_PERSIST_MODE_OFF) &&
-			(lp_on_cmds->cmd_cnt))
+			(lp_on_cmds->cmd_cnt)) {
+		CHANGE_CMD_DATA(lp_off_cmds->cmds, ctrl->lp_off_pos, led_pwm1[1]);
 		mdss_dsi_panel_apply_settings(ctrl, lp_off_cmds);
+	}
 	else
 		return -EINVAL;
 
@@ -2228,6 +2235,9 @@ static int mdss_dsi_parse_panel_features(struct device_node *np,
 	mdss_dsi_parse_dcs_cmds(np, &ctrl->lp_off_cmds,
 			"qcom,mdss-dsi-lp-mode-off", NULL);
 
+	mdss_dsi_parse_cmd_pos(np, &ctrl_pdata->lp_off_pos,
+		"qcom,mdss-dsi-lp-off-offset");
+
 	return 0;
 }
 
@@ -2729,6 +2739,22 @@ exit:
 	of_node_put(timings_np);
 
 	return rc;
+}
+
+static int mdss_dsi_parse_cmd_pos(struct device_node *np,
+			struct dsi_cmd_pos *pos, const char *name)
+{
+	u32 data[3];
+
+	if (of_property_read_u32_array(np, name, data, 2)) {
+		pr_debug("%s: read %s failed\n", __func__, name);
+		return -EINVAL;
+	}
+
+	pos->line = data[0];
+	pos->offset = data[1];
+
+	return 0;
 }
 
 static int mdss_panel_parse_dt(struct device_node *np,

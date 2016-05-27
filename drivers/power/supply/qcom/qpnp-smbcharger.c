@@ -593,6 +593,7 @@ static bool g_is_charger_ability_detected = false;
 static int g_count_same_dischg = 0;
 static bool g_is_5v_2a_detected = false;
 static bool g_rerun_apsd_ignore_uv = false;
+static bool g_is_parallel_enabled = false;
 #endif /* CONFIG_HTC_BATT */
 
 static int smbchg_read(struct smbchg_chip *chip, u8 *val,
@@ -2184,7 +2185,11 @@ static int smbchg_set_fastchg_current_raw(struct smbchg_chip *chip,
 #define USBIN_ACTIVE_PWR_SRC_BIT	BIT(1)
 #define DCIN_ACTIVE_PWR_SRC_BIT		BIT(0)
 #define PARALLEL_REENABLE_TIMER_MS	1000
+#ifdef CONFIG_HTC_BATT
+#define PARALLEL_CHG_THRESHOLD_CURRENT  2400
+#else
 #define PARALLEL_CHG_THRESHOLD_CURRENT	1800
+#endif /* CONFIG_HTC_BATT */
 static bool smbchg_is_usbin_active_pwr_src(struct smbchg_chip *chip)
 {
 	int rc;
@@ -2322,6 +2327,9 @@ static void smbchg_parallel_usb_disable(struct smbchg_chip *chip)
 	if (!parallel_psy || !chip->parallel_charger_detected)
 		return;
 	pr_smb(PR_STATUS, "disabling parallel charger\n");
+#ifdef CONFIG_HTC_BATT
+	g_is_parallel_enabled = false;
+#endif
 	chip->parallel.last_disabled = ktime_get_boottime();
 	taper_irq_en(chip, false);
 	chip->parallel.initial_aicl_ma = 0;
@@ -2498,6 +2506,9 @@ static void smbchg_parallel_usb_enable(struct smbchg_chip *chip,
 					supplied_parallel_fcc_ma);
 
 	chip->parallel.enabled_once = true;
+#ifdef CONFIG_HTC_BATT
+	g_is_parallel_enabled = true;
+#endif
 }
 
 static bool smbchg_is_parallel_usb_ok(struct smbchg_chip *chip,
@@ -5331,6 +5342,7 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 	g_is_charger_ability_detected = false;
 	g_is_hvdcp_detect_done = false;
 	g_is_5v_2a_detected = false;
+	g_is_parallel_enabled = false;
 	/* Cancel smbchg_usb_limit_max_current_work */
 	if (delayed_work_pending(&chip->usb_limit_max_current))
 		cancel_delayed_work_sync(&chip->usb_limit_max_current);
@@ -9548,6 +9560,19 @@ bool is_otg_enabled(void)
 	u8 otg_status = 0;
 	smbchg_read(the_chip, &otg_status, the_chip->bat_if_base + CMD_CHG_REG, 1);
 	if ((otg_status & OTG_EN_BIT) != 0)
+		return true;
+	else
+		return false;
+}
+
+bool is_parallel_enabled(void)
+{
+	if(!the_chip) {
+		pr_err("called before init\n");
+		return false;
+	}
+
+	if (g_is_parallel_enabled)
 		return true;
 	else
 		return false;

@@ -599,6 +599,7 @@ static bool g_is_charger_ability_detected = false;
 static int g_count_same_dischg = 0;
 static bool g_is_5v_2a_detected = false;
 static bool g_rerun_apsd_ignore_uv = false;
+static bool g_is_ext_otg_en = false;
 static bool g_is_parallel_enabled = false;
 #endif /* CONFIG_HTC_BATT */
 
@@ -4342,6 +4343,9 @@ static int smbchg_external_otg_regulator_enable(struct regulator_dev *rdev)
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
 	union power_supply_propval pval = {0, };
 
+#ifdef CONFIG_HTC_BATT
+	g_is_ext_otg_en = true;
+#endif /* CONFIG_HTC_BATT */
 	rc = vote(chip->usb_suspend_votable, OTG_EN_VOTER, true, 0);
 	if (rc < 0) {
 		dev_err(chip->dev, "Couldn't suspend charger rc=%d\n", rc);
@@ -4430,6 +4434,10 @@ static int smbchg_external_otg_regulator_disable(struct regulator_dev *rdev)
 		rc = power_supply_set_present(parallel_psy, false);
 		if (rc)
 			pr_err("parallel-charger absent rc=%d\n", rc);
+
+#ifdef CONFIG_HTC_BATT
+		g_is_ext_otg_en = false;
+#endif /* CONFIG_HTC_BATT */
 	} else {
 		dev_err(chip->dev, "no parallel_psy\n");
 	}
@@ -9856,8 +9864,16 @@ int pmi8994_set_float_voltage_comp (int vfloat_comp)
 bool is_otg_enabled(void)
 {
 	u8 otg_status = 0;
+
+	if(!the_chip) {
+		pr_err("called before init\n");
+		return false;
+	}
+
 	smbchg_read(the_chip, &otg_status, the_chip->bat_if_base + CMD_CHG_REG, 1);
 	if ((otg_status & OTG_EN_BIT) != 0)
+		return true;
+	else if (g_is_ext_otg_en)
 		return true;
 	else
 		return false;
@@ -10723,6 +10739,12 @@ static void smbchg_shutdown(struct platform_device *pdev)
 {
 	struct smbchg_chip *chip = dev_get_drvdata(&pdev->dev);
 	int rc;
+
+#ifdef CONFIG_HTC_BATT
+	/* Disable SMB1351 OTG if necessary*/
+	if (g_is_ext_otg_en)
+		smbchg_external_otg_regulator_disable(chip->ext_otg_vreg.rdev);
+#endif /* CONFIG_HTC_BATT */
 
 	if (!(chip->wa_flags & SMBCHG_RESTART_WA))
 		return;

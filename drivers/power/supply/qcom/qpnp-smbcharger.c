@@ -5021,6 +5021,10 @@ static int smbchg_change_usb_supply_type(struct smbchg_chip *chip,
 		current_limit_ma = smbchg_default_hvdcp_icl_ma;
 	else if (type == POWER_SUPPLY_TYPE_USB_HVDCP_3)
 		current_limit_ma = smbchg_default_hvdcp3_icl_ma;
+#ifdef CONFIG_HTC_BATT
+	else if (type == POWER_SUPPLY_TYPE_UNKNOWN)
+		current_limit_ma = DEFAULT_TYPE_UNKNOWN_MA;
+#endif /* CONFIG_HTC_BATT */
 	else
 		current_limit_ma = smbchg_default_dcp_icl_ma;
 

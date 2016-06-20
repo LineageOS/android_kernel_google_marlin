@@ -1423,6 +1423,7 @@ err_comp_cleanup:
 }
 
 #ifdef CONFIG_USB_CONFIGFS_UEVENT
+static bool connect2pc = false;
 static void android_work(struct work_struct *data)
 {
 	struct gadget_info *gi = container_of(data, struct gadget_info, work);
@@ -1473,7 +1474,21 @@ static void android_work(struct work_struct *data)
 		pr_info("%s: did not send uevent (%d %d %pK)\n", __func__,
 			gi->connected, gi->sw_connected, cdev->config);
 	}
+
+	if (connect2pc != gi->sw_connected) {
+		connect2pc = gi->sw_connected;
+		pr_info("[USB] %s: set usb_connect2pc = %d\n", __func__, connect2pc);
+		if (!connect2pc) {
+			pr_info("%s: OS_NOT_YET\n", __func__);
+		}
+	}
 }
+
+bool get_connect2pc(void)
+{
+	return connect2pc;
+}
+EXPORT_SYMBOL_GPL(get_connect2pc);
 #endif
 
 static void configfs_composite_unbind(struct usb_gadget *gadget)

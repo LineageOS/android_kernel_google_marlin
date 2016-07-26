@@ -4343,6 +4343,7 @@ struct regulator_ops smbchg_otg_reg_ops = {
 #define USBIN_ADAPTER_9V		0x3
 #define USBIN_ADAPTER_5V_9V_CONT	0x2
 #define USBIN_ADAPTER_5V_UNREGULATED_9V	0x5
+#ifndef CONFIG_HTC_BATT
 static int smbchg_external_otg_regulator_enable(struct regulator_dev *rdev)
 {
 	int rc = 0;
@@ -4399,6 +4400,7 @@ static int smbchg_external_otg_regulator_enable(struct regulator_dev *rdev)
 	}
 	return rc;
 }
+#endif /* CONFIG_HTC_BATT */
 
 static int smbchg_external_otg_regulator_disable(struct regulator_dev *rdev)
 {
@@ -4459,7 +4461,9 @@ static int smbchg_external_otg_regulator_is_enable(struct regulator_dev *rdev)
 }
 
 struct regulator_ops smbchg_external_otg_reg_ops = {
+#ifndef CONFIG_HTC_BATT
 	.enable		= smbchg_external_otg_regulator_enable,
+#endif
 	.disable	= smbchg_external_otg_regulator_disable,
 	.is_enabled	= smbchg_external_otg_regulator_is_enable,
 };
@@ -10769,9 +10773,8 @@ static void smbchg_shutdown(struct platform_device *pdev)
 	int rc;
 
 #ifdef CONFIG_HTC_BATT
-	/* Disable SMB1351 OTG if necessary*/
-	if (g_is_ext_otg_en)
-		smbchg_external_otg_regulator_disable(chip->ext_otg_vreg.rdev);
+	/* Force Disable SMB1351 OTG before device reboot/shutdown */
+	smbchg_external_otg_regulator_disable(chip->ext_otg_vreg.rdev);
 #endif /* CONFIG_HTC_BATT */
 
 	if (!(chip->wa_flags & SMBCHG_RESTART_WA))

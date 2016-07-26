@@ -3260,6 +3260,11 @@ static int smb1351_parallel_charger_probe(struct i2c_client *client,
 
 	create_debugfs_entries(chip);
 
+	/* Force Disable SMB1351 OTG during booting */
+	rc = smb1351_masked_write(chip, CMD_CHG_REG, CMD_OTG_EN_BIT, 0);
+	if (rc)
+		pr_err("Couldn't disable OTG mode rc=%d\n", rc);
+
 	pr_info("smb1351 parallel successfully probed.\n");
 
 	return 0;

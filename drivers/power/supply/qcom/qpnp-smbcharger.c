@@ -712,7 +712,7 @@ static void smbchg_stay_awake(struct smbchg_chip *chip, int reason)
 	mutex_lock(&chip->pm_lock);
 	reasons = chip->wake_reasons | reason;
 	if (reasons != 0 && chip->wake_reasons == 0) {
-		pr_smb(PR_PM, "staying awake: 0x%02x (bit %d)\n",
+		pr_smb(PR_STATUS, "staying awake: 0x%02x (bit %d)\n",
 				reasons, reason);
 		pm_stay_awake(chip->dev);
 	}
@@ -727,7 +727,7 @@ static void smbchg_relax(struct smbchg_chip *chip, int reason)
 	mutex_lock(&chip->pm_lock);
 	reasons = chip->wake_reasons & (~reason);
 	if (reasons == 0 && chip->wake_reasons != 0) {
-		pr_smb(PR_PM, "relaxing: 0x%02x (bit %d)\n",
+		pr_smb(PR_STATUS, "relaxing: 0x%02x (bit %d)\n",
 				reasons, reason);
 		pm_relax(chip->dev);
 	}
@@ -10095,9 +10095,9 @@ int charger_dump_all(void)
 
 	printk(KERN_INFO "[BATT][SMBCHG] "
 		"0x1010=%02x,0x1210=%02x,0x1242=%02x,0x1310=%02x,0x1340=%02x,0x1610=%02x,"
-		"cc=%duAh,warm_temp=%d,cool_temp=%d,pmic=rev%d.%d,batfet_wa=%d\n",
+		"cc=%duAh,warm_temp=%d,cool_temp=%d,pmic=rev%d.%d,batfet_wa=%d,wake_reason=%d\n",
 		chgr_rt_sts,bat_if_rt_sts,bat_if_cmd,chgpth_rt_sts,chgpth_cmd,misc_rt_sts,
-		cc_uah,warm_temp,cool_temp,pmic_revid_rev4,pmic_revid_rev3, batfet_keep_close_wa);
+		cc_uah,warm_temp,cool_temp,pmic_revid_rev4,pmic_revid_rev3, batfet_keep_close_wa, the_chip->wake_reasons);
 
 	smbchg_dump_reg();
 

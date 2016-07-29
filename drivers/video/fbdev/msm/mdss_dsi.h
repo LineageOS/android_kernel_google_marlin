@@ -602,10 +602,20 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_cmd_pos lp_off_pos;
 };
 
+struct te_data {
+	bool irq_enabled;
+	bool err_fg;
+	int irq;
+	unsigned long ts_vsync;
+	unsigned long ts_last_check;
+	spinlock_t spinlock;
+};
+
 struct dsi_status_data {
 	struct notifier_block fb_notifier;
 	struct delayed_work check_status;
 	struct msm_fb_data_type *mfd;
+	struct te_data te;
 };
 
 void mdss_dsi_read_hw_revision(struct mdss_dsi_ctrl_pdata *ctrl);

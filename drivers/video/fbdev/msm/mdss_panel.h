@@ -164,6 +164,17 @@ enum {
 	PU_DUAL_ROI,
 };
 
+enum panel_setting {
+	PERSISTENCE_MODE,
+	RGB_GAIN,
+};
+
+struct rgb_gain {
+	uint16_t R;
+	uint16_t G;
+	uint16_t B;
+};
+
 struct mdss_rect {
 	u16 x;
 	u16 y;
@@ -984,7 +995,7 @@ struct mdss_panel_timing {
 struct mdss_panel_data {
 	struct mdss_panel_info panel_info;
 	void (*set_backlight) (struct mdss_panel_data *pdata, u32 bl_level);
-	int (*apply_display_setting)(struct mdss_panel_data *pdata, u32 mode);
+	int (*apply_display_setting) (struct mdss_panel_data *pdata, enum panel_setting, u32 mode);
 	unsigned char *mmss_cc_base;
 
 	/**

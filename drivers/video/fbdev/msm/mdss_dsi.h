@@ -397,6 +397,7 @@ struct dsi_err_container {
 struct dsi_cmd_pos {
 	int line;
 	int offset;
+	int size;
 };
 
 #define DSI_CTRL_LEFT		DSI_CTRL_0
@@ -420,6 +421,7 @@ struct dsi_cmd_pos {
 #define MSM_DBA_CHIP_NAME_MAX_LEN				20
 
 #define DISPLAY_LOW_PERSISTENCE_MASK    1
+#define DISPLAY_RGB_GAIN_MASK    1
 
 struct mdss_dsi_ctrl_pdata {
 	int ndx;	/* panel_num */
@@ -506,6 +508,7 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds off_cmds;
 	struct dsi_panel_cmds lp_on_cmds;
 	struct dsi_panel_cmds lp_off_cmds;
+	struct dsi_panel_cmds gain_on_cmds;
 	struct dsi_panel_cmds status_cmds;
 	u32 *status_valid_params;
 	u32 *status_cmds_rlen;
@@ -600,6 +603,8 @@ struct mdss_dsi_ctrl_pdata {
 	bool phy_power_off;
 	bool dsi_cmd_hs;
 	struct dsi_cmd_pos lp_off_pos;
+	struct dsi_cmd_pos rgb_gain_pos;
+	struct rgb_gain rgb_gain;
 };
 
 struct te_data {

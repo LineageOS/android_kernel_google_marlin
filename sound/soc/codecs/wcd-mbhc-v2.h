@@ -485,6 +485,7 @@ struct wcd_mbhc {
 	struct notifier_block psy_nb;
 	struct power_supply *usb_psy;
 	struct work_struct usbc_analog_work;
+	bool force_linein;
 //HTC_AUD_START
 	/* Add attribute on sysfs for debugging */
 	struct class *htc_accessory_class;

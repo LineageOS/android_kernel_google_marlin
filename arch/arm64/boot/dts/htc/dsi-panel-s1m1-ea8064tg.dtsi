@@ -138,5 +138,9 @@
 		qcom,esd-check-enabled;
 		qcom,mdss-dsi-panel-status-check-mode = "te_signal_check";
 		htc,mdss-dsi-bl-dim-check = <30>;
+		qcom,mdss-dsi-hbm-on-command = [
+			15 01 00 00 00 00 02 53 e0];
+		qcom,mdss-dsi-hbm-off-command = [
+			15 01 00 00 00 00 02 53 20];
 	};
 };

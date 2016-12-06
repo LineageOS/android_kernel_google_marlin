@@ -79,6 +79,14 @@ tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec); \
 #define SUSPEND_HIGHFREQ_CHECK_BIT_SEARCH	(1<<1)
 #define SUSPEND_HIGHFREQ_CHECK_BIT_MUSIC	(1<<3)
 
+#define KERNEL_FLAG_KEEP_CHARG_ON 		BIT(2)
+#define KERNEL_FLAG_DISABLE_SAFETY_TIMER 	BIT(13)
+#define KERNEL_FLAG_FOR_PA_TEST 		BIT(14)
+#define KERNEL_FLAG_TEST_PWR_SUPPLY 		BIT(15)
+#define KERNEL_FLAG_ENABLE_FAST_CHARGE		BIT(26)
+#define KERNEL_FLAG_DISABLE_TBATT_PROTECT 	BIT(28)
+#define KERNEL_FLAG_ENABLE_BMS_CHARGER_LOG 	BIT(29)
+
 struct battery_info_reply {
 	u32 batt_vol;
 	u32 batt_id;
@@ -390,6 +398,7 @@ int htc_battery_pd_charger_support(int size, struct htc_pd_data pd_data, int *ma
 bool htc_battery_is_pd_detected(void);
 int htc_battery_get_pd_current(void);
 int htc_battery_get_pd_vbus(int *vbus);
+void htc_battery_backlight_dim_mode_check(bool status);
 
 /* Implement on QCT driver */
 int request_charger_status(enum htc_charger_request mode, void *ret_buf);
@@ -417,5 +426,5 @@ void pmi8996_set_dcp_default(void);
 bool pmi8996_is_booting_stage(void);
 bool htc_battery_get_discharging_reason(void);
 bool get_ima_error_status(void);
-
+int pmi8996_charger_batfet_switch(bool enable);
 #endif /* __HTC_BATTERY_H__ */

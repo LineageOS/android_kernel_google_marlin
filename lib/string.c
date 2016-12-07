@@ -705,7 +705,7 @@ int __sysfs_match_string(const char * const *array, size_t n, const char *str)
 		item = array[index];
 		if (!item)
 			break;
-		if (!sysfs_streq(item, str))
+		if (sysfs_streq(item, str))
 			return index;
 	}
 

@@ -345,6 +345,8 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	if (err)
 		goto free_stack;
 
+	tsk->flags &= ~PF_SU;
+
 	tsk->stack = stack;
 #ifdef CONFIG_SECCOMP
 	/*

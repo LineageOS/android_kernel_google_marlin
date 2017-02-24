@@ -140,6 +140,7 @@ static int fwu_do_reflash(void);
 
 static int fwu_recovery_check_status(void);
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static ssize_t fwu_sysfs_show_image(struct file *data_file,
 		struct kobject *kobj, struct bin_attribute *attributes,
 		char *buf, loff_t pos, size_t count);
@@ -192,6 +193,7 @@ static ssize_t fwu_sysfs_guest_code_block_count_show(struct device *dev,
 
 static ssize_t fwu_sysfs_write_guest_code_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count);
+#endif
 
 enum f34_version {
 	F34_V0 = 0,
@@ -708,6 +710,7 @@ struct synaptics_rmi4_fwu_handle {
 #endif
 };
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static struct bin_attribute dev_attr_data = {
 	.attr = {
 		.name = "data",
@@ -765,11 +768,30 @@ static struct device_attribute attrs[] = {
 			synaptics_rmi4_show_error,
 			fwu_sysfs_write_guest_code_store),
 };
+#endif
 
 static struct synaptics_rmi4_fwu_handle *fwu;
 
 DECLARE_COMPLETION(fwu_remove_complete);
+
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 DEFINE_MUTEX(fwu_sysfs_mutex);
+#endif
+
+/* Check offset + size <= bound.  true if in bounds, false otherwise. */
+static bool in_bounds(unsigned long offset, unsigned long size,
+		      unsigned long bound)
+{
+	if (offset > bound || size > bound) {
+		pr_err("%s: %lu or %lu > %lu\n", __func__, offset, size, bound);
+		return false;
+	}
+	if (offset > (bound - size)) {
+		pr_err("%s: %lu > %lu - %lu\n", __func__, offset, size, bound);
+		return false;
+	}
+	return true;
+}
 
 #ifdef HTC_FEATURE
 static uint32_t syn_crc(uint16_t *data, uint32_t len)
@@ -908,6 +930,7 @@ static int fwu_f51_force_data_init(void)
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_allocate_read_config_buf(unsigned int count)
 {
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
@@ -927,6 +950,7 @@ static int fwu_allocate_read_config_buf(unsigned int count)
 
 	return 0;
 }
+#endif
 
 static void fwu_compare_partition_tables(void)
 {
@@ -966,8 +990,10 @@ static void fwu_compare_partition_tables(void)
 	return;
 }
 
-static void fwu_parse_partition_table(const unsigned char *partition_table,
-		struct block_count *blkcount, struct physical_address *phyaddr)
+static int fwu_parse_partition_table(const unsigned char *partition_table,
+				     unsigned long len,
+				     struct block_count *blkcount,
+				     struct physical_address *phyaddr)
 {
 	unsigned char ii;
 	unsigned char index;
@@ -979,6 +1005,11 @@ static void fwu_parse_partition_table(const unsigned char *partition_table,
 
 	for (ii = 0; ii < fwu->partitions; ii++) {
 		index = ii * 8 + 2;
+		if (!in_bounds(index, sizeof(*ptable), len)) {
+			pr_err("%s: %d/%d not in bounds\n", __func__, ii,
+			       fwu->partitions);
+			return -EINVAL;
+		}
 		ptable = (struct partition_table *)&partition_table[index];
 		partition_length = ptable->partition_length_15_8 << 8 |
 				ptable->partition_length_7_0;
@@ -987,7 +1018,7 @@ static void fwu_parse_partition_table(const unsigned char *partition_table,
 		dev_dbg(rmi4_data->pdev->dev.parent,
 				"%s: Partition entry %d:\n",
 				__func__, ii);
-		for (offset = 0; offset < 8; offset++) {
+		for (offset = 0; offset < sizeof(*ptable); offset++) {
 			dev_dbg(rmi4_data->pdev->dev.parent,
 					"%s: 0x%02x\n",
 					__func__,
@@ -1077,16 +1108,17 @@ static void fwu_parse_partition_table(const unsigned char *partition_table,
 		};
 	}
 
-	return;
+	return 0;
 }
 
-static void fwu_parse_image_header_10_utility(const unsigned char *image)
+static int fwu_parse_image_header_10_utility(const unsigned char *image)
 {
 	unsigned char ii;
 	unsigned char num_of_containers;
 	unsigned int addr;
 	unsigned int container_id;
 	unsigned int length;
+	unsigned int content_offset;
 	const unsigned char *content;
 	struct container_descriptor *descriptor;
 
@@ -1099,15 +1131,22 @@ static void fwu_parse_image_header_10_utility(const unsigned char *image)
 		if (ii >= MAX_UTILITY_PARAMS)
 			continue;
 		addr = le_to_uint(fwu->img.utility.data + (ii * 4));
+		if (!in_bounds(addr, sizeof(*descriptor), fwu->image_size))
+			return -EINVAL;
 		descriptor = (struct container_descriptor *)(image + addr);
 		container_id = descriptor->container_id[0] |
 				descriptor->container_id[1] << 8;
-		content = image + le_to_uint(descriptor->content_address);
+		content_offset = le_to_uint(descriptor->content_address);
 		length = le_to_uint(descriptor->content_length);
+		if (!in_bounds(content_offset, length, fwu->image_size))
+			return -EINVAL;
+		content = image + content_offset;
 		switch (container_id) {
 		case UTILITY_PARAMETER_CONTAINER:
 			fwu->img.utility_param[ii].data = content;
 			fwu->img.utility_param[ii].size = length;
+			if (length < sizeof(content[0]))
+				return -EINVAL;
 			fwu->img.utility_param_id[ii] = content[0];
 			break;
 		default:
@@ -1115,28 +1154,36 @@ static void fwu_parse_image_header_10_utility(const unsigned char *image)
 		};
 	}
 
-	return;
+	return 0;
 }
 
-static void fwu_parse_image_header_10_bootloader(const unsigned char *image)
+static int fwu_parse_image_header_10_bootloader(const unsigned char *image)
 {
 	unsigned char ii;
 	unsigned char num_of_containers;
 	unsigned int addr;
 	unsigned int container_id;
 	unsigned int length;
+	unsigned int content_offset;
 	const unsigned char *content;
 	struct container_descriptor *descriptor;
 
+	if (fwu->img.bootloader.size < 4)
+		return -EINVAL;
 	num_of_containers = (fwu->img.bootloader.size - 4) / 4;
 
 	for (ii = 1; ii <= num_of_containers; ii++) {
 		addr = le_to_uint(fwu->img.bootloader.data + (ii * 4));
+		if (!in_bounds(addr, sizeof(*descriptor), fwu->image_size))
+			return -EINVAL;
 		descriptor = (struct container_descriptor *)(image + addr);
 		container_id = descriptor->container_id[0] |
 				descriptor->container_id[1] << 8;
-		content = image + le_to_uint(descriptor->content_address);
+		content_offset = le_to_uint(descriptor->content_address);
 		length = le_to_uint(descriptor->content_length);
+		if (!in_bounds(content_offset, length, fwu->image_size))
+			return -EINVAL;
+		content = image + content_offset;
 		switch (container_id) {
 		case BL_IMAGE_CONTAINER:
 			fwu->img.bl_image.data = content;
@@ -1157,29 +1204,36 @@ static void fwu_parse_image_header_10_bootloader(const unsigned char *image)
 		};
 	}
 
-	return;
+	return 0;
 }
 
-static void fwu_parse_image_header_10(void)
+static int fwu_parse_image_header_10(void)
 {
 	unsigned char ii;
 	unsigned char num_of_containers;
 	unsigned int addr;
 	unsigned int offset;
+	unsigned int content_offset;
 	unsigned int container_id;
 	unsigned int length;
+	unsigned int image_size;
 	const unsigned char *image;
 	const unsigned char *content;
 	struct container_descriptor *descriptor;
 	struct image_header_10 *header;
 
 	image = fwu->image;
+	image_size = fwu->image_size;
+	if (image_size < sizeof(*header))
+		return -EINVAL;
 	header = (struct image_header_10 *)image;
 
 	fwu->img.checksum = le_to_uint(header->checksum);
 
 	/* address of top level container */
 	offset = le_to_uint(header->top_level_container_start_addr);
+	if (!in_bounds(offset, sizeof(*descriptor), image_size))
+		return -EINVAL;
 	descriptor = (struct container_descriptor *)(image + offset);
 
 	/* address of top level container content */
@@ -1187,13 +1241,20 @@ static void fwu_parse_image_header_10(void)
 	num_of_containers = le_to_uint(descriptor->content_length) / 4;
 
 	for (ii = 0; ii < num_of_containers; ii++) {
+		if (!in_bounds(offset, 4, image_size))
+			return -EINVAL;
 		addr = le_to_uint(image + offset);
 		offset += 4;
+		if (!in_bounds(addr, sizeof(*descriptor), image_size))
+			return -EINVAL;
 		descriptor = (struct container_descriptor *)(image + addr);
 		container_id = descriptor->container_id[0] |
 				descriptor->container_id[1] << 8;
-		content = image + le_to_uint(descriptor->content_address);
+		content_offset = le_to_uint(descriptor->content_address);
 		length = le_to_uint(descriptor->content_length);
+		if (!in_bounds(content_offset, length, image_size))
+			return -EINVAL;
+		content = image + content_offset;
 		switch (container_id) {
 		case UI_CONTAINER:
 		case CORE_CODE_CONTAINER:
@@ -1209,12 +1270,14 @@ static void fwu_parse_image_header_10(void)
 			fwu->img.bl_version = *content;
 			fwu->img.bootloader.data = content;
 			fwu->img.bootloader.size = length;
-			fwu_parse_image_header_10_bootloader(image);
+			if (fwu_parse_image_header_10_bootloader(image))
+				return -EINVAL;
 			break;
 		case UTILITY_CONTAINER:
 			fwu->img.utility.data = content;
 			fwu->img.utility.size = length;
-			fwu_parse_image_header_10_utility(image);
+			if (fwu_parse_image_header_10_utility(image))
+				return -EINVAL;
 			break;
 		case GUEST_CODE_CONTAINER:
 			fwu->img.contains_guest_code = true;
@@ -1239,6 +1302,8 @@ static void fwu_parse_image_header_10(void)
 			break;
 		case GENERAL_INFORMATION_CONTAINER:
 			fwu->img.contains_firmware_id = true;
+			if (length < 4 + 4)
+				return -EINVAL;
 			fwu->img.firmware_id = le_to_uint(content + 4);
 			break;
 		default:
@@ -1246,10 +1311,10 @@ static void fwu_parse_image_header_10(void)
 		}
 	}
 
-	return;
+	return 0;
 }
 
-static void fwu_parse_image_header_05_06(void)
+static int fwu_parse_image_header_05_06(void)
 {
 	int retval;
 	const unsigned char *image;
@@ -1257,6 +1322,8 @@ static void fwu_parse_image_header_05_06(void)
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
 
 	image = fwu->image;
+	if (fwu->image_size < sizeof(*header))
+		return -EINVAL;
 	header = (struct image_header_05_06 *)image;
 
 	fwu->img.checksum = le_to_uint(header->checksum);
@@ -1269,18 +1336,51 @@ static void fwu_parse_image_header_05_06(void)
 
 	fwu->img.ui_firmware.size = le_to_uint(header->firmware_size);
 	if (fwu->img.ui_firmware.size) {
-		fwu->img.ui_firmware.data = image + IMAGE_AREA_OFFSET;
-		if (fwu->img.contains_bootloader)
-			fwu->img.ui_firmware.data += fwu->img.bootloader_size;
+		unsigned int ui_firmware_offset = IMAGE_AREA_OFFSET;
+
+		if (fwu->img.contains_bootloader) {
+			if (!in_bounds(ui_firmware_offset,
+				       fwu->img.bootloader_size,
+				       fwu->image_size)) {
+				return -EINVAL;
+			}
+			ui_firmware_offset += fwu->img.bootloader_size;
+		}
+		if (!in_bounds(ui_firmware_offset,
+			       fwu->img.ui_firmware.size,
+			       fwu->image_size)) {
+			return -EINVAL;
+		}
+		fwu->img.ui_firmware.data = image + ui_firmware_offset;
 	}
 
-	if ((fwu->img.bl_version == BL_V6) && header->options_tddi)
+	if ((fwu->img.bl_version == BL_V6) && header->options_tddi) {
+		if (!in_bounds(IMAGE_AREA_OFFSET,
+			       fwu->img.ui_firmware.size,
+			       fwu->image_size)) {
+			return -EINVAL;
+		}
 		fwu->img.ui_firmware.data = image + IMAGE_AREA_OFFSET;
+	}
 
 	fwu->img.ui_config.size = le_to_uint(header->config_size);
 	if (fwu->img.ui_config.size) {
-		fwu->img.ui_config.data = fwu->img.ui_firmware.data +
+		unsigned int ui_firmware_end;
+
+		if (fwu->img.ui_firmware.data < image)
+			return -EINVAL;
+		if (!in_bounds(fwu->img.ui_firmware.data - image,
+			       fwu->img.ui_firmware.size,
+			       fwu->image_size)) {
+			return -EINVAL;
+		}
+		ui_firmware_end = fwu->img.ui_firmware.data - image +
 				fwu->img.ui_firmware.size;
+		if (!in_bounds(ui_firmware_end, fwu->img.ui_config.size,
+			       fwu->image_size)) {
+			return -EINVAL;
+		}
+		fwu->img.ui_config.data = image + ui_firmware_end;
 	}
 
 	if ((fwu->img.bl_version == BL_V5 && fwu->img.contains_bootloader) ||
@@ -1292,6 +1392,11 @@ static void fwu_parse_image_header_05_06(void)
 	if (fwu->img.contains_disp_config) {
 		fwu->img.disp_config_offset = le_to_uint(header->dsp_cfg_addr);
 		fwu->img.dp_config.size = le_to_uint(header->dsp_cfg_size);
+		if (!in_bounds(fwu->img.disp_config_offset,
+			       fwu->img.dp_config.size,
+			       fwu->image_size)) {
+			return -EINVAL;
+		}
 		fwu->img.dp_config.data = image + fwu->img.disp_config_offset;
 	} else {
 		retval = secure_memcpy(fwu->img.cstmr_product_id,
@@ -1323,33 +1428,50 @@ static void fwu_parse_image_header_05_06(void)
 	}
 	fwu->img.product_id[PRODUCT_ID_SIZE] = 0;
 
+	if (LOCKDOWN_SIZE > IMAGE_AREA_OFFSET)
+		return -EINVAL;
+	if (fwu->image_size < IMAGE_AREA_OFFSET)
+		return -EINVAL;
 	fwu->img.lockdown.size = LOCKDOWN_SIZE;
 	fwu->img.lockdown.data = image + IMAGE_AREA_OFFSET - LOCKDOWN_SIZE;
 
-	return;
+	return 0;
 }
 
 static int fwu_parse_image_info(void)
 {
+	int parse_retval;
 	struct image_header_10 *header;
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
+	unsigned int image_size = 0;
 
 	header = (struct image_header_10 *)fwu->image;
-
+	if (!header)
+		return -EINVAL;
+	image_size = fwu->image_size;
+	if (image_size < sizeof(struct image_header_05_06) &&
+	    image_size < sizeof(struct image_header_10)) {
+		return -EINVAL;
+	}
+	/* This is clearing img, not image. */
 	memset(&fwu->img, 0x00, sizeof(fwu->img));
 
 	switch (header->major_header_version) {
 	case IMAGE_HEADER_VERSION_10:
-		fwu_parse_image_header_10();
+		parse_retval = fwu_parse_image_header_10();
 		break;
 	case IMAGE_HEADER_VERSION_05:
 	case IMAGE_HEADER_VERSION_06:
-		fwu_parse_image_header_05_06();
+		parse_retval = fwu_parse_image_header_05_06();
 		break;
 	default:
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Unsupported image file format (0x%02x)\n",
 				__func__, header->major_header_version);
+		return -EINVAL;
+	}
+
+	if (parse_retval != 0) {
 		return -EINVAL;
 	}
 
@@ -1361,9 +1483,12 @@ static int fwu_parse_image_info(void)
 			return -EINVAL;
 		}
 
-		fwu_parse_partition_table(fwu->img.fl_config.data,
-				&fwu->img.blkcount, &fwu->img.phyaddr);
-
+		if (fwu_parse_partition_table(fwu->img.fl_config.data,
+					      fwu->img.fl_config.size,
+					      &fwu->img.blkcount,
+					      &fwu->img.phyaddr)) {
+			return -EINVAL;
+		}
 		fwu_compare_partition_tables();
 	} else {
 		fwu->new_partition_table = false;
@@ -1980,7 +2105,11 @@ static int fwu_read_f34_v7_queries(void)
 		return retval;
 	}
 
-	fwu_parse_partition_table(ptable, &fwu->blkcount, &fwu->phyaddr);
+	if (fwu_parse_partition_table(ptable, fwu->partition_table_bytes,
+				      &fwu->blkcount, &fwu->phyaddr)) {
+		kfree(ptable);
+		return -EINVAL;
+	}
 
 	if (fwu->blkcount.dp_config)
 		fwu->flash_properties.has_disp_config = 1;
@@ -2351,6 +2480,7 @@ static int fwu_write_f34_blocks(unsigned char *block_ptr,
 	return retval;
 }
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_read_f34_v7_blocks(unsigned short block_cnt,
 		unsigned char command)
 {
@@ -2504,6 +2634,7 @@ static int fwu_read_f34_blocks(unsigned short block_cnt, unsigned char cmd)
 
 	return retval;
 }
+#endif
 
 static int fwu_get_image_firmware_id(unsigned int *fw_id)
 {
@@ -2525,7 +2656,7 @@ static int fwu_get_image_firmware_id(unsigned int *fw_id)
 		}
 
 		strptr += 2;
-		firmware_id = kzalloc(MAX_FIRMWARE_ID_LEN, GFP_KERNEL);
+		firmware_id = kzalloc(MAX_FIRMWARE_ID_LEN + 1, GFP_KERNEL);
 		if (!firmware_id) {
 			dev_err(rmi4_data->pdev->dev.parent,
 					"%s: Failed to alloc mem for firmware_id\n",
@@ -2912,6 +3043,7 @@ static int fwu_check_ui_configuration_size(void)
 	return 0;
 }
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_check_dp_configuration_size(void)
 {
 	unsigned short block_count;
@@ -2945,6 +3077,7 @@ static int fwu_check_pm_configuration_size(void)
 
 	return 0;
 }
+#endif
 
 #ifndef SYNA_SIMPLE_UPDATE
 static int fwu_check_bl_configuration_size(void)
@@ -2965,6 +3098,7 @@ static int fwu_check_bl_configuration_size(void)
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_check_guest_code_size(void)
 {
 	unsigned short block_count;
@@ -2980,6 +3114,7 @@ static int fwu_check_guest_code_size(void)
 
 	return 0;
 }
+#endif
 
 static int fwu_erase_configuration(void)
 {
@@ -3079,6 +3214,7 @@ static int fwu_erase_utility_parameter(void)
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_erase_guest_code(void)
 {
 	int retval;
@@ -3102,6 +3238,7 @@ static int fwu_erase_guest_code(void)
 
 	return 0;
 }
+#endif
 
 static int fwu_erase_all(void)
 {
@@ -3155,7 +3292,7 @@ static int fwu_erase_all(void)
 
 #ifndef SYNA_SIMPLE_UPDATE
 	if (fwu->flash_properties.has_disp_config &&
-			fwu->img.contains_disp_config) {		
+			fwu->img.contains_disp_config) {
 		fwu->config_area = DP_CONFIG_AREA;
 		retval = fwu_erase_configuration();
 		if (retval < 0)
@@ -3209,6 +3346,9 @@ static int fwu_write_utility_parameter(void)
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
 
 	utility_param_size = fwu->blkcount.utility_param * fwu->block_size;
+	/* See remaining_size below for reason for '4' */
+	if (utility_param_size < 4)
+		return -EINVAL;
 	retval = fwu_allocate_read_config_buf(utility_param_size);
 	if (retval < 0)
 		return retval;
@@ -3301,6 +3441,7 @@ static int fwu_write_ui_configuration(void)
 	return fwu_write_configuration();
 }
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_write_dp_configuration(void)
 {
 	fwu->config_area = DP_CONFIG_AREA;
@@ -3320,6 +3461,7 @@ static int fwu_write_pm_configuration(void)
 
 	return fwu_write_configuration();
 }
+#endif
 
 #ifndef SYNA_SIMPLE_UPDATE
 static int fwu_write_flash_configuration(void)
@@ -3353,6 +3495,7 @@ static int fwu_write_flash_configuration(void)
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_write_guest_code(void)
 {
 	int retval;
@@ -3367,6 +3510,7 @@ static int fwu_write_guest_code(void)
 
 	return 0;
 }
+#endif
 
 static int fwu_write_lockdown(void)
 {
@@ -3875,6 +4019,7 @@ static int fwu_do_reflash(void)
 	return retval;
 }
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_do_read_config(void)
 {
 	int retval;
@@ -3953,6 +4098,7 @@ exit:
 
 	return retval;
 }
+#endif
 
 static int fwu_do_lockdown_v7(void)
 {
@@ -4089,6 +4235,7 @@ static int fwu_do_restore_f51_cal_data(void)
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_start_write_guest_code(void)
 {
 	int retval;
@@ -4294,6 +4441,7 @@ exit:
 
 	return retval;
 }
+#endif
 
 static int fwu_start_reflash(void)
 {
@@ -4349,6 +4497,7 @@ static int fwu_start_reflash(void)
 				"%s: Firmware image size = %d\n",
 				__func__, (unsigned int)fw_entry->size);
 		fwu->image = fw_entry->data;
+		fwu->image_size = fw_entry->size;
 	}
 
 	retval = fwu_parse_image_info();
@@ -4568,6 +4717,7 @@ static int fwu_recovery_check_status(void)
 	return 0;
 }
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static int fwu_recovery_erase_completion(void)
 {
 	int retval;
@@ -4842,6 +4992,7 @@ exit:
 
 	return retval;
 }
+#endif
 
 #ifdef HTC_FEATURE
 static int fwu_do_write_config(uint8_t *config_data)
@@ -4910,6 +5061,7 @@ int synaptics_config_updater(struct synaptics_dsx_board_data *bdata)
 
 	rmi4_data->stay_awake = true;
 
+	memset(config_id, 0, sizeof(config_id));
 	if (fwu->bl_version == BL_V7)
 		config_id_size = V7_CONFIG_ID_SIZE;
 	else
@@ -4928,6 +5080,7 @@ int synaptics_config_updater(struct synaptics_dsx_board_data *bdata)
 	}
 
 	memset(str_buf, 0, sizeof(str_buf));
+	memset(tmp_buf, 0, sizeof(tmp_buf));
 	for (ii = 0; ii < config_id_size; ii++) {
 		snprintf(tmp_buf, 3, "%02x ", config_id[ii]);
 		strlcat(str_buf, tmp_buf, sizeof(str_buf));
@@ -5094,8 +5247,10 @@ static void fwu_startup_fw_update_work(struct work_struct *work)
 	}
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	/* Prevent sysfs operations during initial update. */
 	mutex_lock(&fwu_sysfs_mutex);
+#endif
 
 #ifdef HTC_FEATURE
 	wake_lock(&fwu->fwu_wake_lock);
@@ -5111,11 +5266,14 @@ static void fwu_startup_fw_update_work(struct work_struct *work)
 #else
 	synaptics_fw_updater(NULL);
 #endif
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	mutex_unlock(&fwu_sysfs_mutex);
+#endif
 	return;
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 static ssize_t fwu_sysfs_show_image(struct file *data_file,
 		struct kobject *kobj, struct bin_attribute *attributes,
 		char *buf, loff_t pos, size_t count)
@@ -5549,6 +5707,7 @@ write_guest_code_store_exit:
 	mutex_unlock(&fwu_sysfs_mutex);
 	return retval;
 }
+#endif
 
 static void synaptics_rmi4_fwu_attn(struct synaptics_rmi4_data *rmi4_data,
 		unsigned char intr_mask)
@@ -5565,7 +5724,9 @@ static void synaptics_rmi4_fwu_attn(struct synaptics_rmi4_data *rmi4_data,
 static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 {
 	int retval;
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	unsigned char attr_count;
+#endif
 	struct pdt_properties pdt_props;
 
 	if (fwu) {
@@ -5633,6 +5794,7 @@ static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 	fwu->do_lockdown = DO_LOCKDOWN;
 	fwu->initialized = true;
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	retval = sysfs_create_bin_file(&rmi4_data->input_dev->dev.kobj,
 			&dev_attr_data);
 	if (retval < 0) {
@@ -5653,6 +5815,7 @@ static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 			goto exit_remove_attrs;
 		}
 	}
+#endif
 
 #ifdef DO_STARTUP_FW_UPDATE
 #ifdef HTC_FEATURE
@@ -5675,13 +5838,19 @@ static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 
 	return 0;
 
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26) || \
+	defined(F51_DISCRETE_FORCE)
 exit_remove_attrs:
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	for (attr_count--; attr_count >= 0; attr_count--) {
 		sysfs_remove_file(&rmi4_data->input_dev->dev.kobj,
 				&attrs[attr_count].attr);
 	}
 
 	sysfs_remove_bin_file(&rmi4_data->input_dev->dev.kobj, &dev_attr_data);
+#endif
 
 exit_free_mem:
 	kfree(fwu->image_name);
@@ -5696,8 +5865,9 @@ exit:
 
 static void synaptics_rmi4_fwu_remove(struct synaptics_rmi4_data *rmi4_data)
 {
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	unsigned char attr_count;
-
+#endif
 	if (!fwu)
 		goto exit;
 
@@ -5710,12 +5880,14 @@ static void synaptics_rmi4_fwu_remove(struct synaptics_rmi4_data *rmi4_data)
 #endif
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_SYSFS_HTC_v26
 	for (attr_count = 0; attr_count < ARRAY_SIZE(attrs); attr_count++) {
 		sysfs_remove_file(&rmi4_data->input_dev->dev.kobj,
 				&attrs[attr_count].attr);
 	}
 
 	sysfs_remove_bin_file(&rmi4_data->input_dev->dev.kobj, &dev_attr_data);
+#endif
 
 #ifdef F51_DISCRETE_FORCE
 	kfree(fwu->cal_data);

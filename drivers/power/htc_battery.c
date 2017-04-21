@@ -24,6 +24,7 @@
 #include <linux/notifier.h>
 #include <linux/fb.h>
 #endif /* CONFIG_FB */
+#include <linux/leds.h>
 
 static struct htc_battery_info htc_batt_info;
 static struct htc_battery_timer htc_batt_timer;
@@ -1127,6 +1128,21 @@ int htc_batt_schedule_batt_info_update(void)
         return 0;
 }
 
+void htc_battery_backlight_dim_mode_check(bool status)
+{
+	int rc = 0;
+
+	if (status) {
+		rc = pmi8996_charger_batfet_switch(true);
+		if (rc < 0)
+			BATT_ERR("Unable to set batfet switch true, rc = %d\n", rc);
+	} else {
+		rc = pmi8996_charger_batfet_switch(false);
+		if (rc < 0)
+			BATT_ERR("Unable to set batfet switch false, rc = %d\n", rc);
+	}
+}
+
 #if defined(CONFIG_FB)
 static int fb_notifier_callback(struct notifier_block *self,
                                 unsigned long event, void *data)
@@ -1439,14 +1455,12 @@ static void batt_worker(struct work_struct *work)
 	if ((int)htc_batt_info.rep.charging_source > POWER_SUPPLY_TYPE_BATTERY) {
 		/*  STEP 11.1.1 check and update chg_dis_reason */
 		if (g_ftm_charger_control_flag == FTM_FAST_CHARGE || g_flag_force_ac_chg) {
-			s_prev_user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
 			if (htc_batt_info.rep.charging_source == POWER_SUPPLY_TYPE_USB){
 				user_set_chg_curr = FAST_CHARGE_CURR;
 			} else {
 				user_set_chg_curr = WALL_CHARGE_CURR;
 			}
 		} else if (g_ftm_charger_control_flag == FTM_SLOW_CHARGE) {
-			s_prev_user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
 			user_set_chg_curr = SLOW_CHARGE_CURR;
 			pmi8994_set_iusb_max(user_set_chg_curr);
 #ifdef CONFIG_HTC_CHARGER
@@ -1456,7 +1470,7 @@ static void batt_worker(struct work_struct *work)
 		} else {
 			/* WA: QCT  recorgnize D+/D- open charger won't set 500mA. */
 			if ((htc_batt_info.rep.charging_source == POWER_SUPPLY_TYPE_USB)) {
-				s_prev_user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
+				user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
 				if (!get_connect2pc() && !g_rerun_apsd_done && !g_is_unknown_charger) {
 					user_set_chg_curr = SLOW_CHARGE_CURR;
 					if (delayed_work_pending(&htc_batt_info.chk_unknown_chg_work))
@@ -1464,15 +1478,14 @@ static void batt_worker(struct work_struct *work)
 					schedule_delayed_work(&htc_batt_info.chk_unknown_chg_work,
 							msecs_to_jiffies(CHG_UNKNOWN_CHG_PERIOD_MS));
 				} else {
-					if (s_prev_user_set_chg_curr < SLOW_CHARGE_CURR)
-						s_prev_user_set_chg_curr = SLOW_CHARGE_CURR;
-					user_set_chg_curr = s_prev_user_set_chg_curr;
+					if (user_set_chg_curr < SLOW_CHARGE_CURR)
+						user_set_chg_curr = SLOW_CHARGE_CURR;
 				}
 			} else if (htc_batt_info.rep.charging_source == POWER_SUPPLY_TYPE_USB_HVDCP){
-				s_prev_user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
+				user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
 				pmi8994_set_iusb_max(HVDCP_CHARGE_CURR);
 			} else if (htc_batt_info.rep.charging_source == POWER_SUPPLY_TYPE_USB_HVDCP_3){
-				s_prev_user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
+				user_set_chg_curr = get_property(htc_batt_info.usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
 				pmi8994_set_iusb_max(HVDCP_3_CHARGE_CURR);
 			}
 		}
@@ -2310,6 +2323,7 @@ module_param_named(
 #define PD_LIMIT_VBUS_MV 5000
 #define PD_LIMIT_CURRENT_MA 3000
 #define MESG_MAX_LENGTH 300
+#define PD_MAX_POWER 18000000	/* 18W = 9V * 2A */
 int htc_battery_pd_charger_support(int size, struct htc_pd_data pd_data, int *max_mA)
 {
 	int i = 0;
@@ -2331,6 +2345,11 @@ int htc_battery_pd_charger_support(int size, struct htc_pd_data pd_data, int *ma
 		pd_vbus_vol = pd_data.pd_list[i][0];
 		pd_ma = pd_data.pd_list[i][1];
 		pd_power = pd_vbus_vol * pd_ma;
+
+		if (pd_power > PD_MAX_POWER) {
+			pd_power = PD_MAX_POWER;
+			pd_ma = pd_power / pd_vbus_vol;
+		}
 
 		if (pd_vbus_vol > PD_MAX_VBUS) {
 			pr_debug("[BATT][PD] Voltage %dV > %dV, skip to prevent OVP\n",

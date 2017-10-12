@@ -603,6 +603,7 @@ static bool g_is_5v_2a_detected = false;
 static bool g_rerun_apsd_ignore_uv = false;
 static bool g_is_ext_otg_en = false;
 static bool g_is_parallel_enabled = false;
+static bool g_is_aicl_enabled = true;
 #endif /* CONFIG_HTC_BATT */
 
 static int smbchg_read(struct smbchg_chip *chip, u8 *val,
@@ -2107,8 +2108,8 @@ static int smbchg_set_usb_current_max(struct smbchg_chip *chip,
 #ifdef CONFIG_HTC_BATT
 	case POWER_SUPPLY_TYPE_USB_PD_DRP:
 	case POWER_SUPPLY_TYPE_USB_PD:
-		g_is_charger_ability_detected = true;
 	case POWER_SUPPLY_TYPE_USB_TYPE_C:
+		g_is_charger_ability_detected = true;
 		/* PMIC doesn't recognize PD or Type-C, override APSD with
 		   command register. */
 		rc = smbchg_masked_write(chip,
@@ -2443,7 +2444,9 @@ static int smbchg_sw_esr_pulse_en(struct smbchg_chip *chip, bool en)
 static void smbchg_rerun_aicl(struct smbchg_chip *chip)
 {
 #ifdef CONFIG_HTC_BATT
-	if (htc_battery_is_pd_detected()){
+	if (htc_battery_is_pd_detected() ||
+	    (chip->utc.sink_current &&
+	    (chip->utc.sink_current != utcc_default))) {
 		set_aicl_enable(false);
 		pr_info("PD charger donot rerun AICL.\n");
 		return;
@@ -2872,6 +2875,9 @@ static void smbchg_parallel_usb_en_work(struct work_struct *work)
 	int previous_aicl_ma, total_current_ma, aicl_ma;
 	bool in_progress;
 
+	if (!g_is_aicl_enabled)
+		goto skip_aicl_checked;
+
 	/* do a check to see if the aicl is stable */
 	previous_aicl_ma = smbchg_get_aicl_level_ma(chip);
 	msleep(PARALLEL_CHARGER_EN_DELAY_MS);
@@ -2886,6 +2892,7 @@ static void smbchg_parallel_usb_en_work(struct work_struct *work)
 		goto recheck;
 	}
 
+skip_aicl_checked:
 	mutex_lock(&chip->parallel.lock);
 	in_progress = (chip->parallel.current_max_ma != 0);
 	if (smbchg_is_parallel_usb_ok(chip, &total_current_ma)) {
@@ -5501,7 +5508,6 @@ static void smbchg_iusb_5v_2a_detect_work(struct work_struct *work)
 static void smbchg_sink_current_change_worker(struct work_struct *work)
 {
 	enum power_supply_type type;
-	int aicl = 0;
 
 	if (!the_chip) {
 		pr_err("called before init\n");
@@ -5512,8 +5518,10 @@ static void smbchg_sink_current_change_worker(struct work_struct *work)
 
 	type = the_chip->usb_supply_type;
 	if (the_chip->utc.sink_current &&
-	    the_chip->utc.sink_current != utcc_default)
+	    the_chip->utc.sink_current != utcc_default) {
 		type = POWER_SUPPLY_TYPE_USB_TYPE_C;
+		g_is_charger_ability_detected = true;
+	}
 
 	if ((type != POWER_SUPPLY_TYPE_USB_TYPE_C) ||
 	    (the_chip->utc.sink_current == utcc_none) ||
@@ -5530,33 +5538,25 @@ static void smbchg_sink_current_change_worker(struct work_struct *work)
 		goto redelay;
 	}
 
-	aicl = smbchg_get_aicl_level_ma(the_chip);
+	pr_smb(PR_STATUS, "sink_current: %d\n",
+	       (int)the_chip->utc.sink_current);
 
-	pr_smb(PR_STATUS, "sink_current: %d, AICL: %d\n",
-	       (int)the_chip->utc.sink_current, aicl);
+	set_aicl_enable(false);
 
 	switch (the_chip->utc.sink_current) {
 	case utcc_1p5A:
-		if (aicl == USB_MA_1500) {
-			pr_smb(PR_STATUS,
-			       "AICL is already configured correctly, skip.\n");
-		} else {
-			pr_smb(PR_STATUS, "vote AICL 1500mA\n");
-			vote(the_chip->usb_icl_votable, PSY_ICL_VOTER,
-			     true, USB_MA_1500);
-			smbchg_rerun_aicl(the_chip);
-		}
+		pr_smb(PR_STATUS, "vote AICL 1500mA\n");
+		power_supply_set_current_limit(the_chip->usb_psy,
+					       USB_MA_1500 * 1000);
+		vote(the_chip->usb_icl_votable, PSY_ICL_VOTER,
+		     true, USB_MA_1500);
 		break;
 	case utcc_3p0A:
-		if (aicl == USB_MA_3000) {
-			pr_smb(PR_STATUS,
-			       "AICL is already configured correctly, skip.\n");
-		} else {
-			pr_smb(PR_STATUS, "vote AICL 3000mA\n");
-			vote(the_chip->usb_icl_votable, PSY_ICL_VOTER,
-			     true, USB_MA_3000);
-			smbchg_rerun_aicl(the_chip);
-		}
+		pr_smb(PR_STATUS, "vote AICL 3000mA\n");
+		power_supply_set_current_limit(the_chip->usb_psy,
+					       USB_MA_3000 * 1000);
+		vote(the_chip->usb_icl_votable, PSY_ICL_VOTER,
+		     true, USB_MA_3000);
 		break;
 	default:
 		pr_smb(PR_STATUS,
@@ -8035,9 +8035,10 @@ void check_charger_ability(int aicl_level)
 	pr_smb(PR_STATUS, "CHG_TYPE = %d, AICL = %d, level = %d, vbat_mv = %d, hard_limit = %d\n",
 		usb_supply_type, aicl_level, level, vbat_mv, is_smbchg_hard_limit(the_chip));
 
-	if (usb_supply_type != POWER_SUPPLY_TYPE_USB_DCP &&
-		usb_supply_type != POWER_SUPPLY_TYPE_USB_TYPE_C)
+	if (usb_supply_type != POWER_SUPPLY_TYPE_USB_DCP) {
+		g_is_charger_ability_detected = true;
 		return;
+	}
 
 	if ((!is_smbchg_hard_limit(the_chip)) &&
 		((level > SKIP_HARD_LIMIT_CHECK_LEVEL) || (vbat_mv > SKIP_HARD_LIMIT_CHECK_VBAT_MV))) {
@@ -8122,6 +8123,11 @@ void pmi8996_set_dcp_default(void)
 		pr_err("called before init\n");
 		return;
 	}
+
+	if (the_chip->utc.sink_current &&
+	    the_chip->utc.sink_current != utcc_default)
+		pr_smb(PR_STATUS, "No need for Type-C charger.\n");
+		return;
 
 	aicl_result = smbchg_get_aicl_level_ma(the_chip);
 
@@ -9753,10 +9759,12 @@ void set_aicl_enable(bool bEnable)
                 pr_info("Enable AICL...\n");
                 smbchg_sec_masked_write(the_chip, the_chip->usb_chgpth_base + USB_AICL_CFG,
                          AICL_EN_BIT, AICL_EN_BIT);
+		g_is_aicl_enabled = true;
 	}else{
 		pr_info("Disable AICL...\n");
 		smbchg_sec_masked_write(the_chip, the_chip->usb_chgpth_base + USB_AICL_CFG,
                         AICL_EN_BIT, 0);
+		g_is_aicl_enabled = false;
 	}
 }
 

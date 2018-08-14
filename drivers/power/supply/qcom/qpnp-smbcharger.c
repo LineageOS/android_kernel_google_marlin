@@ -4999,10 +4999,6 @@ static int smbchg_change_usb_supply_type(struct smbchg_chip *chip,
 			current_limit_ma = 1500;
 		else if (chip->utc.sink_current == utcc3p0A)
 			current_limit_ma = 3000;
-		/* To make sure Type-C charger do have the ability to work at
-		   3A high current mode, need go through 5v2a detect worker
-		   before setting 3A, so set default low current right here */
-		current_limit_ma = DEFAULT_TYPEC_MA;
 	} else
 #endif /* CONFIG_HTC_BATT */
 	if (chip->typec_psy && (type != POWER_SUPPLY_TYPE_USB))

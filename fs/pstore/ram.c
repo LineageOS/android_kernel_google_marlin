@@ -36,6 +36,7 @@
 #include <linux/pstore_ram.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/htc_debug_tools.h>
 
 #define RAMOOPS_KERNMSG_HDR "===="
 #define MIN_MEM_SIZE 4096UL
@@ -505,6 +506,71 @@ void notrace ramoops_console_write_buf(const char *buf, size_t size)
 	persistent_ram_write(cxt->cprz, buf, size);
 }
 
+#ifdef CONFIG_OF
+static struct of_device_id ramoops_of_match[] = {
+	{ .compatible = "ramoops", },
+	{ },
+};
+
+MODULE_DEVICE_TABLE(of, ramoops_of_match);
+static void  ramoops_of_init(struct platform_device *pdev)
+{
+	const struct device *dev = &pdev->dev;
+	struct ramoops_platform_data *pdata;
+	struct device_node *np = pdev->dev.of_node;
+	u32 start = 0, size = 0, console = 0, pmsg = 0;
+	u32 record = 0, oops = 0;
+	int ret;
+
+	pdata = dev_get_drvdata(dev);
+	if (!pdata) {
+		pr_err("private data is empty!\n");
+		return;
+	}
+	ret = of_property_read_u32(np, "android,ramoops-buffer-start",
+				&start);
+	if (ret)
+		return;
+
+	ret = of_property_read_u32(np, "android,ramoops-buffer-size",
+				&size);
+	if (ret)
+		return;
+
+	ret = of_property_read_u32(np, "android,ramoops-console-size",
+				&console);
+	if (ret)
+		return;
+
+	ret = of_property_read_u32(np, "android,ramoops-pmsg-size",
+				&pmsg);
+	if (ret)
+		pr_info("pmsg buffer not configured");
+
+	ret = of_property_read_u32(np, "android,ramoops-record-size",
+				&record);
+	if (ret)
+		pr_info("record buffer not configured");
+
+	ret = of_property_read_u32(np, "android,ramoops-dump-oops",
+				&oops);
+	if (ret)
+		pr_info("oops not configured");
+
+	pdata->mem_address = start;
+	pdata->mem_size = size;
+	pdata->console_size = console;
+	pdata->pmsg_size = pmsg;
+	pdata->record_size = record;
+	pdata->dump_oops = (int)oops;
+}
+#else
+static inline void ramoops_of_init(struct platform_device *pdev)
+{
+	return;
+}
+#endif
+
 static int ramoops_parse_dt_size(struct platform_device *pdev,
 		const char *propname, unsigned long *val)
 {
@@ -593,11 +659,22 @@ static int ramoops_parse_dt(struct platform_device *pdev,
 static int ramoops_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ramoops_platform_data *pdata = pdev->dev.platform_data;
+	struct ramoops_platform_data *pdata;
 	struct ramoops_context *cxt = &oops_cxt;
 	size_t dump_mem_sz;
 	phys_addr_t paddr;
 	int err = -EINVAL;
+
+	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		pr_err("could not allocate ramoops_platform_data\n");
+		return -ENOMEM;
+	}
+
+	dev_set_drvdata(dev, pdata);
+
+	if (pdev->dev.of_node)
+		ramoops_of_init(pdev);
 
 	if (dev->of_node && !pdata) {
 		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
@@ -705,6 +782,13 @@ static int ramoops_probe(struct platform_device *pdev)
 		cxt->size, (unsigned long long)cxt->phys_addr,
 		cxt->ecc_info.ecc_size, cxt->ecc_info.block_size);
 
+#if defined(CONFIG_HTC_DEBUG_BOOTLOADER_LOG)
+	if (cxt->console_size)
+	{
+		bldr_log_init();
+	}
+#endif
+
 	return 0;
 
 fail_buf:
@@ -731,6 +815,10 @@ static int ramoops_remove(struct platform_device *pdev)
 	kfree(cxt->pstore.buf);
 	cxt->pstore.bufsize = 0;
 
+#if defined(CONFIG_HTC_DEBUG_BOOTLOADER_LOG)
+	bldr_log_release();
+#endif
+
 	persistent_ram_free(cxt->mprz);
 	persistent_ram_free(cxt->fprz);
 	persistent_ram_free(cxt->cprz);
@@ -749,7 +837,7 @@ static struct platform_driver ramoops_driver = {
 	.remove		= ramoops_remove,
 	.driver		= {
 		.name		= "ramoops",
-		.of_match_table	= dt_match,
+		.of_match_table	= of_match_ptr(ramoops_of_match),
 	},
 };
 

@@ -129,6 +129,11 @@ static ssize_t pstore_file_read(struct file *file, char __user *userbuf,
 
 	if (ps->type == PSTORE_TYPE_FTRACE)
 		return seq_read(file, userbuf, count, ppos);
+#if defined(CONFIG_HTC_DEBUG_BOOTLOADER_LOG)
+	if (ps->type == PSTORE_TYPE_CONSOLE) {
+		return bldr_log_read(ps->data, ps->size, userbuf, count, ppos);
+	}
+#endif
 	return simple_read_from_buffer(userbuf, count, ppos, ps->data, ps->size);
 }
 

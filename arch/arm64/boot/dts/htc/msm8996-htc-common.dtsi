@@ -53,23 +53,6 @@
 	firmware {
 		android {
 			compatible = "android,firmware";
-			fstab {
-				compatible = "android,fstab";
-				vendor {
-					compatible = "android,vendor";
-					dev = "/dev/block/platform/soc/624000.ufshc/by-name/vendor";
-					type = "ext4";
-					mnt_flags = "ro,barrier=1";
-					fsmgr_flags = "wait,slotselect";
-				};
-				persist {
-					compatible = "android,persist";
-					dev = "/dev/block/platform/soc/624000.ufshc/by-name/persist";
-					type = "ext4";
-					mnt_flags = "nosuid,nodev,noatime,barrier=1";
-					fsmgr_flags = "wait";
-				};
-			};
 		};
 	};
 };

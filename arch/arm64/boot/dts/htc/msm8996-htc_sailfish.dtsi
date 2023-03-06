@@ -1,0 +1,157 @@
+/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+#include "msm8996-htc_marlin.dtsi"
+#include "msm8996-touch-s1.dtsi"
+
+&qusb_phy0 {
+	qcom,qusb-phy-init-seq = <0xA8 0x80
+				0x63 0x84
+				0x83 0x88
+				0xC0 0x8C
+				0x03 0x90
+				0x30 0x08
+				0x79 0x0C
+				0x21 0x10
+				0x14 0x9C
+				0x9F 0x1C
+				0x00 0x18>;
+};
+
+&i2c_9 {
+	fusb302@22 {
+		src-pdo = <PDO_TYPE_FIXED 5000 900 0>;		/* FIXED 5V-0.9A */
+		snk-pdo = <PDO_TYPE_FIXED 5000 3000 0>,		/* FIXED 5V-3A */
+			  <PDO_TYPE_BATT 4000 10000 18000>;	/* BATT [4-10]V-18W */
+		max-snk-mv = <5000>;
+		max-snk-ma = <3000>;
+		max-snk-mw = <15000>;
+		op-snk-mw = <7600>;
+		port-type = <TYPEC_PORT_DRP>;
+		default-role = <TYPEC_SINK>;
+	};
+};
+
+&pmi8994_charger {
+        qcom,hvdcp-not-support;
+        qcom,iterm-ma = <50>;
+        qcom,fastchg-current-ma = <2600>;
+        qcom,float-voltage-mv = <4400>;
+        qcom,float-voltage-comp = <0x1E>;
+        qcom,charging-timeout-mins = <768>;
+        qcom,precharging-timeout-mins = <24>;
+        qcom,resume-delta-mv = <100>;
+        qcom,parallel-main-chg-icl-percent = <50>;
+        qcom,batt-eoc-current-ma = <50>;
+        qcom,usb_pwr_temp-vadc = <&pm8994_vadc>;
+        qcom,pd-is-limited-5v;
+        qcom,smb_out_isen-vadc = <&pmi8994_vadc>;
+};
+
+&pmi8994_fg {
+        qcom,thermal-coefficients = [97 85 62 49 5A 35];
+        qcom,resume-soc = <98>;
+        qcom,warm-bat-decidegc = <470>;
+        qcom,cool-bat-decidegc = <100>;
+        qcom,hot-bat-decidegc = <550>;
+        qcom,cold-bat-decidegc = <0>;
+        qcom,fg-iterm-ma = <277>;
+        qcom,fg-chg-iterm-ma = <50>;
+        qcom,fg-cc-cv-threshold-mv = <4390>;
+	qcom,ext-sense-type;
+        qcom,cold-hot-jeita-hysteresis = <20 30>;
+        qcom,fg-cutoff-voltage-mv = <3250>;
+        qcom,irq-volt-empty-mv = <3050>;
+        qcom,capacity-learning-feedback;
+};
+
+/{
+        qcom,battery-data {
+                qcom,batt-id-range-pct = <15>;
+                /delete-node/ qcom,itech-3000mah;
+                /delete-node/ qcom,m1-id1-batterydata;
+                /delete-node/ qcom,m1-id2-batterydata;
+                /delete-node/ qcom,m1-id3-batterydata;
+                #include "batterydata-s1-id1.dtsi"
+                #include "batterydata-s1-id2.dtsi"
+                #include "batterydata-s1-id3.dtsi"
+
+        };
+};
+
+&pmi8994_mpps {
+       /* MPP 1 - SMB_OUT_ISEN */
+        mpp@a000 {
+                qcom,pin-num = <1>;
+                qcom,mode = <4>;        /* QPNP_PIN_MODE_AIN */
+                qcom,src-sel = <0>;     /* QPNP_PIN_SEL_FUNC_CONSTANT */
+                qcom,ain-route = <0>;   /* QPNP_PIN_AIN_AMUX_CH5 */
+                qcom,master-en = <1>;   /* Enable */
+                status = "okay";
+        };
+};
+
+&pmi8994_vadc {
+        chan@10 {
+                label = "smb_out_isen";
+                reg = <0x10>;
+                qcom,decimation = <0>;
+                qcom,pre-div-channel-scaling = <0>;
+                qcom,calibration-type = "absolute";
+                qcom,scale-function = <0>;
+                qcom,hw-settle-time = <1>;
+                qcom,fast-avg-setup = <2>;
+        };
+};
+
+&pm8994_mpps {
+        mpp@a600 { /* MPP 7 - USB_PWR_TEMP */
+                qcom,mode = <4>;                /* QPNP_PIN_MODE_AIN */
+                qcom,vin-sel = <2>;             /* S4 1.8V */
+                qcom,src-sel = <0>;             /* Constant */
+                qcom,ain-route = <2>;           /* QPNP_PIN_AIN_AMUX_CH7 */
+                qcom,master-en = <1>;           /* Enable GPIO */
+                status = "okay";
+        };
+};
+
+&pm8994_vadc {
+	chan@16 {
+                label = "mpp7_div1";
+                reg = <0x16>;
+                qcom,decimation = <0>;
+                qcom,pre-div-channel-scaling = <0>;
+                qcom,calibration-type = "ratiometric";
+                qcom,scale-function = <0>;
+                qcom,hw-settle-time = <1>;
+                qcom,fast-avg-setup = <2>;
+        };
+
+	chan@26 {
+                label = "mpp7_div3";
+                reg = <0x26>;
+                qcom,decimation = <0>;
+                qcom,pre-div-channel-scaling = <1>;
+                qcom,calibration-type = "absolute";
+                qcom,scale-function = <0>;
+                qcom,hw-settle-time = <1>;
+                qcom,fast-avg-setup = <2>;
+        };
+};
+
+&pmi8994_haptics {
+	qcom,vmax-mv = <3132>;
+	qcom,vmax-strong-mv = <3132>;
+	qcom,vmax-light-mv = <2200>;
+	qcom,timeout-strong-threshold = <330>;
+};

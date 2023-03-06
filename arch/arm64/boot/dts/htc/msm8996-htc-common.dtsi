@@ -1,0 +1,141 @@
+/*
+ * msm8996-htc-common: common configs of HTC msm8996 projects
+ */
+
+&dfps_data_mem {
+	/* qct original reg = <0 0x83400000 0 0x1000>; */
+	reg = <0 0xc0000000 0 0x1000>;
+};
+
+&cont_splash_mem {
+	/* qct original reg = <0 0x83401000 0 0x23ff000>; */
+	reg = <0 0xc0001000 0 0x31ff000>;
+};
+
+/ {
+
+        reserved-memory {
+		htc_reserve_region: htc_reserve_region@0 {
+			#address-cells = <2>;
+			#size-cells = <2>;
+			ranges;
+
+			htc_reserve1_mem: htc_reserve1_region@0 {
+				compatible = "removed-dma-pool";
+				no-map;
+				reg = <0 0x83600000 0 0x00100000>;
+			};
+			msm_rtb_mem: msm_rtb_region@0 {
+				compatible = "removed-dma-pool";
+				no-map;
+				reg = <0 0x83700000 0 0x00100000>;
+			};
+			htc_reserve2_mem: htc_reserve2_region@0 {
+				compatible = "removed-dma-pool";
+				no-map;
+				reg = <0 0x83800000 0 0x00800000>;
+			};
+		};
+
+                htc_rtel_mem: htc_rtel_region@0 {
+                        compatible = "shared-dma-pool";
+                        reusable;
+                        reg = <0 0x84000000 0 0x1400000>; /* 20 MB */
+                };
+
+		ramoops_mem: ramoops_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0 0x83500000 0 0x00100000>;
+		};
+	};
+
+	firmware {
+		android {
+			compatible = "android,firmware";
+			fstab {
+				compatible = "android,fstab";
+				vendor {
+					compatible = "android,vendor";
+					dev = "/dev/block/platform/soc/624000.ufshc/by-name/vendor";
+					type = "ext4";
+					mnt_flags = "ro,barrier=1";
+					fsmgr_flags = "wait,slotselect";
+				};
+				persist {
+					compatible = "android,persist";
+					dev = "/dev/block/platform/soc/624000.ufshc/by-name/persist";
+					type = "ext4";
+					mnt_flags = "nosuid,nodev,noatime,barrier=1";
+					fsmgr_flags = "wait";
+				};
+			};
+		};
+	};
+};
+
+&soc {
+	qcom,msm-imem@66bf000 {
+		restart_info@a94 {
+			compatible = "htc,msm-imem-restart_info";
+			reg = <0xa94 100>;
+			info_size = <100>;
+		};
+
+		mem_dump_table@10 {
+			htc,mem-dump-table-phys = <0x836f0000>; /* at the end 0x10000 of Last LK RAM log */
+		};
+	};
+
+	qcom,msm-rtb {
+		reg = <0x83700000 0x100000>;
+		reg-names = "msm_rtb_res";
+	};
+
+	htc_mnemosyne@0 {
+		compatible = "htc,mnemosyne";
+		reg = <0x83CE0000 0x2000>;
+		reg-names = "htc_mnemosyne_res";
+	};
+
+        qcom,rmtfs_rtel_sharedmem@0 {
+                compatible = "htc,rtel-uio";
+                reg = <0x84000000 0x01400000>;
+                memory-region = <&htc_rtel_mem>;
+                reg-names = "rtel";
+                qcom,client-id = <0x00000001>;
+        };
+
+	ramoops {
+		compatible = "ramoops";
+		status = "ok";
+
+		android,ramoops-buffer-start = <0x83500000>;
+		android,ramoops-buffer-size = <0x00100000>;
+		android,ramoops-console-size = <0x00080000>;
+		android,ramoops-pmsg-size = <0x00040000>;
+		android,ramoops-record-size = <0x00008000>;
+		android,ramoops-ftrace-size = <0x00020000>;
+		android,ramoops-dump-oops = <0x1>;
+		linux,contiguous-region = <&ramoops_mem>;
+	};
+
+	qcom,msm-rtb {
+		linux,contiguous-region = <&msm_rtb_mem>;
+		memory-region = <&msm_rtb_mem>;
+	};
+
+	qcom,bcl {
+		/delete-property/ qcom,bcl-hotplug-list;
+		/delete-property/ qcom,bcl-soc-hotplug-list;
+		qcom,ibat-monitor {
+			qcom,mitigation-freq-khz = <1132800>;
+		};
+	};
+	/delete-node/ qcom,qbt1000;
+};
+
+&wdog {
+	qcom,bark-time = <18000>;
+	qcom,pet-time = <8000>;
+};

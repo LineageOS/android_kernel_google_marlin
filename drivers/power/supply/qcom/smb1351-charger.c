@@ -647,12 +647,7 @@ static int smb1351_usb_suspend(struct smb1351_charger *chip, int reason,
 	else
 		suspended |= reason;
 
-#ifdef CONFIG_HTC_BATT
-	pr_info("reason = %d requested_suspend = %d suspended_status = %d -> %d\n",
-			reason, suspend, chip->usb_suspended_status, suspended);
-#else
 	pr_debug("new suspended_status = %d\n", suspended);
-#endif /* CONFIG_HTC_BATT */
 
 	rc = smb1351_masked_write(chip, CMD_INPUT_LIMIT_REG,
 				CMD_SUSPEND_MODE_BIT,
@@ -1436,11 +1431,6 @@ static int smb1351_parallel_set_chg_suspend(struct smb1351_charger *chip,
 				chip->parallel_charger_suspended, !suspend);
 		return 0;
 	}
-#ifdef CONFIG_HTC_BATT
-	else
-		pr_info("set slave present = %d -> %d\n",
-			chip->parallel_charger_present, present);
-#endif /* CONFIG_HTC_BATT */
 
 	if (!suspend) {
 		rc = smb_chip_get_version(chip);
@@ -1617,10 +1607,7 @@ static int smb1351_parallel_set_property(struct power_supply *psy,
 		 *CHG EN is controlled by pin in the parallel charging.
 		 *Use suspend if disable charging by command.
 		 */
-#ifndef CONFIG_HTC_BATT
 		if (!chip->parallel_charger_suspended)
-#endif /* CONFIG_HTC_BATT */
-		{
 			rc = smb1351_usb_suspend(chip, USER, !val->intval);
 		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:

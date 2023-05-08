@@ -7051,7 +7051,7 @@ static const struct snd_soc_dapm_route htc_quat_mi2s_virtual_route[] = {
 static int msm_htc_quat_mi2s_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 
 	pr_info("%s: ++\n", __func__);
 	snd_soc_add_codec_controls(codec, mi2s_amp_path_controls,

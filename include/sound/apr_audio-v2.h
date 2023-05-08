@@ -10938,11 +10938,6 @@ struct afe_port_cmd_set_aanc_acdb_table {
 
 #define HTC_POPP_TOPOLOGY				0x10000002
 #define HTC_POPP_HD_TOPOLOGY				0x10000003
-struct asm_params {
-	struct apr_hdr	hdr;
-	struct asm_stream_cmd_set_pp_params_v2 param;
-	struct asm_stream_param_data_v2 data;
-} __packed;
 //HTC_AUD_END
 
 /*  Payload of the #AFE_PARAM_ID_GROUP_DEVICE_CFG

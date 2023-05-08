@@ -357,7 +357,6 @@ static int ctl_elem_write_user(struct snd_ctl_file *file,
 				       &type, &count);
 	if (err < 0)
 		goto error;
-	}
 
 	snd_power_lock(card);
 	err = snd_power_wait(card, SNDRV_CTL_POWER_D0);

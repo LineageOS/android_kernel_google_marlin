@@ -1698,47 +1698,22 @@ correct_plug_type:
 					continue;
 				} else {
 					no_gnd_mic_swap_cnt = 0;
-					if (pt_gnd_mic_swap_cnt <
-							GND_MIC_SWAP_THRESHOLD) {
-						continue;
-					} else if (pt_gnd_mic_swap_cnt >
-							GND_MIC_SWAP_THRESHOLD) {
-						/*
-						 * This is due to GND/MIC switch didn't
-						 * work,  Report unsupported plug.
-						 */
-						pr_debug("%s: switch didnt work\n",
-							  __func__);
-						plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
-						goto report;
-					} else {
-						plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
-					}
-				} else {
-					no_gnd_mic_swap_cnt++;
-					pt_gnd_mic_swap_cnt = 0;
-					plug_type = MBHC_PLUG_TYPE_HEADSET;
-					if (no_gnd_mic_swap_cnt <
-							GND_MIC_SWAP_THRESHOLD) {
-						continue;
-					} else {
-						no_gnd_mic_swap_cnt = 0;
-					}
-				}
-				if ((pt_gnd_mic_swap_cnt == GND_MIC_SWAP_THRESHOLD) &&
-					(plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP)) {
-					/*
-					 * if switch is toggled, check again,
-					 * otherwise report unsupported plug
-					 */
-					if (mbhc->mbhc_cfg->swap_gnd_mic &&
-						mbhc->mbhc_cfg->swap_gnd_mic(codec)) {
-						pr_debug("%s: US_EU gpio present,flip switch\n"
-							, __func__);
-						continue;
-					}
 				}
 			}
+			if ((pt_gnd_mic_swap_cnt == GND_MIC_SWAP_THRESHOLD) &&
+				(plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP)) {
+				/*
+				 * if switch is toggled, check again,
+				 * otherwise report unsupported plug
+				 */
+				if (mbhc->mbhc_cfg->swap_gnd_mic &&
+					mbhc->mbhc_cfg->swap_gnd_mic(codec)) {
+					pr_debug("%s: US_EU gpio present,flip switch\n"
+						, __func__);
+					continue;
+				}
+			}
+		}
 //HTC_AUD_START - disable cross conection
 		else {
 			plug_type = MBHC_PLUG_TYPE_HEADSET;

@@ -9,15 +9,6 @@
 		pinctrl-1 = <&gpio_key_suspend>;
 		use-syscore;
 
-		power_key {
-			label = "power_key";
-			gpios = <&tlmm 40 0x1>;
-			linux,input-type = <1>;
-			linux,code = <116>;
-			gpio-key,wakeup;
-			debounce-interval = <20>;
-		};
-
 		vol_up {
 			label = "volume_up";
 			gpios = <&tlmm 126 0x1>;

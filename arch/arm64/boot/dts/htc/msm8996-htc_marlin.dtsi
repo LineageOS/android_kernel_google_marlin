@@ -245,7 +245,7 @@
         qcom,capacity-learning-feedback;
 };
 
-/{
+&vendor{
         qcom,battery-data {
                 qcom,batt-id-range-pct = <15>;
                 /delete-node/ qcom,itech-3000mah;

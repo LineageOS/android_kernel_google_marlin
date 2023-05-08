@@ -180,7 +180,7 @@
 		pinctrl-0 = <&i2c_9_active>;
 		pinctrl-1 = <&i2c_9_sleep>;
 
-		fusb302@22 {
+		fusb_302: fusb302@22 {
 			compatible = "fairchild,fusb302";
 			reg = <0x22>;
 			vdd-supply = <&pm8994_l21>;

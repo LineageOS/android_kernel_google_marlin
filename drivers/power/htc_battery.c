@@ -2037,7 +2037,7 @@ void htc_stats_update(int category, unsigned long chg_time, unsigned long dischg
 
 const char* htc_stats_category2str(int category)
 {
-    const char* ret;
+    const char* ret = NULL;
     switch (category)
     {
         case HTC_STATS_CATEGORY_ALL: ret = "all"; break;

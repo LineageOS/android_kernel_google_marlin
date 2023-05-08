@@ -919,7 +919,7 @@ static ssize_t mdss_fb_change_persist_mode(struct device *dev,
 
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 	if ((pdata) && (pdata->apply_display_setting))
-		ret = pdata->apply_display_setting(pdata, persist_mode);
+		ret = pdata->apply_display_setting(pdata, PERSISTENCE_MODE, persist_mode);
 
 	mutex_unlock(&mfd->bl_lock);
 

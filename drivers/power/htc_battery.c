@@ -243,7 +243,7 @@ static int get_property(struct power_supply *psy, enum power_supply_property pro
 	int rc = 0;
 
 	if (psy) {
-		rc = psy->get_property(psy, prop, &ret);
+		rc = power_supply_get_property(psy, prop, &ret);
 		if (rc) {
 			pr_err("[BATT] failed to retrieve value rc=%d\n", rc);
 			return -1;
@@ -264,7 +264,7 @@ static int set_batt_psy_property(enum power_supply_property prop, int value)
 	if (htc_batt_info.batt_psy) {
 		BATT_EMBEDDED("set_batt_psy_property. value(%d) prop(%d)", value, prop);
 		ret.intval = value;
-		rc = htc_batt_info.batt_psy->set_property(htc_batt_info.batt_psy, prop, &ret);
+		rc = power_supply_set_property(htc_batt_info.batt_psy, prop, &ret);
 	}
 
 	return rc;
@@ -2851,7 +2851,7 @@ void htc_battery_probe_process(enum htc_batt_probe probe_type) {
 		htc_batt_info.batt_psy = power_supply_get_by_name("battery");
 		htc_batt_info.bms_psy = power_supply_get_by_name("bms");
 		htc_batt_info.usb_psy = power_supply_get_by_name("usb");
-		htc_batt_info.parallel_psy = power_supply_get_by_name("usb-parallel");
+		htc_batt_info.parallel_psy = power_supply_get_by_name("parallel");
 
 		/* initial debug flag through QCT exist prop. setting */
 		if (g_flag_keep_charge_on || g_flag_disable_safety_timer)
@@ -2863,7 +2863,7 @@ void htc_battery_probe_process(enum htc_batt_probe probe_type) {
 			htc_batt_info.rep.level_raw = POWER_MONITOR_BATT_CAPACITY;
 		}
 
-		rc = htc_batt_info.bms_psy->get_property(htc_batt_info.bms_psy,
+		rc = power_supply_get_property(htc_batt_info.bms_psy,
 			POWER_SUPPLY_PROP_BATTERY_TYPE, &prop);
 		if (rc) {
 			BATT_ERR("Unable to read battery-type rc=%d\n", rc);

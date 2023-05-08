@@ -9531,7 +9531,7 @@ static struct platform_driver fg_driver = {
 #ifdef CONFIG_HTC_BATT
 static void __init fg_init_async(void *unused, async_cookie_t cookie)
 {
-	spmi_driver_register(&fg_driver);
+	platform_driver_register(&fg_driver);
 }
 static int __init fg_init(void)
 {

@@ -518,6 +518,12 @@ module_param_named(
 	int, 00600
 );
 
+static inline void power_supply_set_current_limit(struct power_supply *psy, int limit)
+{
+	const union power_supply_propval ret = {limit,};
+	power_supply_set_property(psy, POWER_SUPPLY_PROP_CURRENT_MAX, &ret);
+}
+
 #ifdef CONFIG_HTC_BATT
 static int smbchg_default_hvdcp_icl_ma = 1600;
 #else
@@ -605,6 +611,12 @@ static bool g_is_ext_otg_en = false;
 static bool g_is_parallel_enabled = false;
 static bool g_is_aicl_enabled = true;
 #endif /* CONFIG_HTC_BATT */
+
+static inline int power_supply_set_present(struct power_supply *psy, bool enable)
+{
+	const union power_supply_propval ret = {enable,};
+	return power_supply_set_property(psy, POWER_SUPPLY_PROP_PRESENT, &ret);
+}
 
 static int smbchg_read(struct smbchg_chip *chip, u8 *val,
 			u16 addr, int count)
@@ -997,19 +1009,6 @@ static void read_usb_type(struct smbchg_chip *chip, char **usb_type_name,
 	type = get_type(reg);
 	bc12_power_supply_type = get_usb_supply_type(type);
 
-#ifdef CONFIG_HTC_BATT
-	/* Precedence: PD > Type-C (3A or 1.5A) -> SDP, CDP, DCP from APSD
-	 * Origin table matches with APSD detection(SMBCHGL_MISC_IDEV_STS[7:4])
-	 * Now we extended it with below two types
-	 * - Type 5: Type C Port
-	 * - Type 6: Power Delivery Port
-	 */
-	if (htc_battery_is_pd_detected())
-		type = 6;
-	else if (chip->utc.sink_current &&
-			chip->utc.sink_current != utccDefault)
-		type = 5;
-#endif /* CONFIG_HTC_BATT */
 	*usb_type_name = get_usb_type_name(type);
 	*usb_supply_type = get_usb_supply_type(type);
 }
@@ -4424,7 +4423,7 @@ static int smbchg_external_otg_regulator_enable(struct regulator_dev *rdev)
 
 		pval.intval = 1;
 		/*Enable SMB1351 OTG*/
-		parallel_psy->set_property(parallel_psy, POWER_SUPPLY_PROP_USB_OTG, &pval);
+		power_supply_set_property(parallel_psy, POWER_SUPPLY_PROP_USB_OTG, &pval);
 		pr_smb(PR_STATUS, "Enabling external OTG Boost\n");
 	} else {
 		dev_err(chip->dev, "no parallel_psy\n");
@@ -4473,7 +4472,7 @@ static int smbchg_external_otg_regulator_disable(struct regulator_dev *rdev)
 	if (parallel_psy) {
 		pval.intval = 0;
 		/*Disable SMB1351 OTG*/
-		parallel_psy->set_property(parallel_psy, POWER_SUPPLY_PROP_USB_OTG, &pval);
+		power_supply_set_property(parallel_psy, POWER_SUPPLY_PROP_USB_OTG, &pval);
 
 		pr_smb(PR_STATUS, "Disabling external OTG Boost\n");
 		rc = power_supply_set_present(parallel_psy, false);
@@ -5057,6 +5056,7 @@ static int smbchg_change_usb_supply_type(struct smbchg_chip *chip,
 	 */
 	if (type == POWER_SUPPLY_TYPE_USB_PD) {
 		current_limit_ma = htc_battery_get_pd_current();
+		g_is_charger_ability_detected = true;
 	} else if (type == POWER_SUPPLY_TYPE_USB_TYPE_C) {
 		if (chip->utc.sink_current == utcc_1p5A)
 			current_limit_ma = 1500;
@@ -5064,6 +5064,7 @@ static int smbchg_change_usb_supply_type(struct smbchg_chip *chip,
 			current_limit_ma = 3000;
 		power_supply_set_current_limit(chip->usb_psy,
 			current_limit_ma * 1000);
+		g_is_charger_ability_detected = true;
 	} else
 #endif /* CONFIG_HTC_BATT */
 	if (chip->typec_psy && (type != POWER_SUPPLY_TYPE_USB))
@@ -5682,7 +5683,7 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 		pr_err("Couldn't enable input missing poller rc=%d\n", rc);
 
 	voltage_max.intval = 0;
-	rc = chip->usb_psy->set_property(chip->usb_psy,
+	rc = power_supply_set_property(chip->usb_psy,
 			POWER_SUPPLY_PROP_VOLTAGE_MAX,
 			&voltage_max);
 	if (rc)
@@ -5777,7 +5778,7 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 		rc = htc_battery_get_pd_vbus(&voltage_max.intval);
 		if (!rc) {
 			voltage_max.intval = (voltage_max.intval + 100) * 1000;
-			rc = chip->usb_psy->set_property(chip->usb_psy,
+			rc = power_supply_set_property(chip->usb_psy,
 					POWER_SUPPLY_PROP_VOLTAGE_MAX,
 					&voltage_max);
 			if (rc)
@@ -5790,7 +5791,7 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 		}
 	} else {
 		voltage_max.intval = DEFAULT_VBUS_VOLTAGE;
-		rc = chip->usb_psy->set_property(chip->usb_psy,
+		rc = power_supply_set_property(chip->usb_psy,
 				POWER_SUPPLY_PROP_VOLTAGE_MAX,
 				&voltage_max);
 		if (rc)
@@ -8023,7 +8024,7 @@ void check_charger_ability(int aicl_level)
 
 	vbat_mv = get_prop_batt_voltage_now(the_chip)/1000;
 	level = get_prop_batt_capacity(the_chip);
-	rc = the_chip->usb_psy->get_property(the_chip->usb_psy,
+	rc = power_supply_get_property(the_chip->usb_psy,
 				POWER_SUPPLY_PROP_TYPE, &prop);
 	usb_supply_type = prop.intval;
 	if (htc_battery_is_pd_detected())
@@ -8125,9 +8126,10 @@ void pmi8996_set_dcp_default(void)
 	}
 
 	if (the_chip->utc.sink_current &&
-	    the_chip->utc.sink_current != utcc_default)
+	    the_chip->utc.sink_current != utcc_default) {
 		pr_smb(PR_STATUS, "No need for Type-C charger.\n");
 		return;
+	}
 
 	aicl_result = smbchg_get_aicl_level_ma(the_chip);
 
@@ -8435,16 +8437,6 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 			return rc;
 		}
 	}
-#ifdef CONFIG_HTC_BATT
-	else {
-		/* disable HVDCP */
-		pr_smb(PR_STATUS, "Disable HVDCP\n");
-		rc = smbchg_sec_masked_write(chip, chip->usb_chgpth_base + CHGPTH_CFG,
-				HVDCP_EN_BIT, 0);
-		if (rc < 0)
-			pr_err("Couldn't disable HVDCP rc=%d\n", rc);
-	}
-#endif /* CONFIG_HTC_BATT */
 
 	if (chip->aicl_rerun_period_s > 0) {
 		rc = smbchg_set_aicl_rerun_period_s(chip,
@@ -9888,7 +9880,7 @@ static void smbchg_force_hvdcp_worker(struct work_struct *work)
 		return;
 	}
 
-	power_supply_changed(&the_chip->batt_psy);
+	power_supply_changed(the_chip->batt_psy);
 
 	return;
 }
@@ -10242,7 +10234,7 @@ int charger_dump_all(void)
 		"0x1010=%02x,0x1210=%02x,0x1242=%02x,0x1310=%02x,0x1340=%02x,0x1610=%02x,"
 		"cc=%duAh,warm_temp=%d,cool_temp=%d,pmic=rev%d.%d,batfet_wa=%d,wake_reason=%d\n,smb_curr=%dmA\n",
 		chgr_rt_sts,bat_if_rt_sts,bat_if_cmd,chgpth_rt_sts,chgpth_cmd,misc_rt_sts,
-		cc_uah,warm_temp,cool_temp,pmic_revid_rev4,pmic_revid_rev3, batfet_keep_close_wa, the_chip->wake_reasons, smb_current);
+		cc_uah,warm_temp,cool_temp,pmic_revid_rev4,pmic_revid_rev3, g_batfet_keep_close_wa, the_chip->wake_reasons, smb_current);
 
 	smbchg_dump_reg();
 
@@ -10777,11 +10769,11 @@ static int smbchg_probe(struct platform_device *pdev)
 	chip->utc.sink_current = utcc_none;
 	rc = usb_typec_ctrl_register(chip->dev, &chip->utc);
 	if (rc < 0) {
-		dev_err(&spmi->dev,
+		dev_err(&pdev->dev,
 		"Unable to register usb_typec_ctrl rc = %d\n", rc);
 	}
 
-	htc_battery_create_attrs(chip->batt_psy.dev);
+	htc_battery_create_attrs(&chip->batt_psy->dev);
 #endif /* CONFIG_HTC_BATT */
 
 	if (chip->dc_psy_type != -EINVAL) {

@@ -1496,7 +1496,7 @@ static int msm_hsl_console_setup(struct console *co, char *options)
 
 	pm_runtime_get_noresume(port->dev);
 
-#ifndef CONFIG_PM_RUNTIME
+#ifndef CONFIG_PM
 	msm_hsl_init_clock(port);
 #endif
 	pm_runtime_resume(port->dev);

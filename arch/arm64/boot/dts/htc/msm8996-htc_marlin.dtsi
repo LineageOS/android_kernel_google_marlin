@@ -267,13 +267,13 @@
 &pmi8994_haptics {
 	status = "okay";
 	qcom,wave-play-rate-us = <5000>;
-	qcom,actuator-type = "lra";
+	qcom,actuator-type = <0>;
 	qcom,wave-shape = "sine";
 	qcom,vmax-mv = <3596>;
 	qcom,vmax-strong-mv = <3596>;
 	qcom,vmax-light-mv = <1600>;
 	qcom,timeout-strong-threshold = <330>;
-	qcom,brake-pattern = [03 03 03 03];
+	qcom,brake-pattern = <0x3 0x3 0x3 0x3>;
 };
 
 &pm8994_gpios {	/* COVER_INT1 & COVER_INT2 */

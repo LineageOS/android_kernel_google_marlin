@@ -36,7 +36,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			22 1E 07 08 04 03 04 a0
 			22 1E 07 08 04 03 04 a0
 			22 1E 07 08 04 03 04 a0
@@ -222,7 +222,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			22 1E 07 08 04 03 04 a0
 			22 1E 07 08 04 03 04 a0
 			22 1E 07 08 04 03 04 a0
@@ -416,7 +416,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			22 1E 07 08 04 03 04 a0
 			22 1E 07 08 04 03 04 a0
 			22 1E 07 08 04 03 04 a0
@@ -541,7 +541,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			24 1F 08 09 05 03 04 a0
 			24 1F 08 09 05 03 04 a0
 			24 1F 08 09 05 03 04 a0
@@ -656,7 +656,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			1F 1B 05 06 03 03 04 a0
 			1F 1B 05 06 03 03 04 a0
 			1F 1B 05 06 03 03 04 a0
@@ -856,7 +856,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			1F 1C 04 06 03 03 04 a0
 			1F 1C 04 06 03 03 04 a0
 			1F 1C 04 06 03 03 04 a0
@@ -1048,7 +1048,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			1F 1B 05 06 03 03 04 a0
 			1F 1B 05 06 03 03 04 a0
 			1F 1B 05 06 03 03 04 a0
@@ -1178,7 +1178,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 32 22 00 62 66 26 36 28 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			1F 1C 04 06 03 03 04 a0
 			1F 1C 04 06 03 03 04 a0
 			1F 1C 04 06 03 03 04 a0

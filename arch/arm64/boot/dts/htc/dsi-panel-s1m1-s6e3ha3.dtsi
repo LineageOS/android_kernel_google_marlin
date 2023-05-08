@@ -48,7 +48,7 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 		qcom,mdss-dsi-panel-timings = [D6 38 26 00 68 6E 2A 3C 2C 03 04 00];
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			25 20 09 0A 06 03 04 A0
 			25 20 09 0A 06 03 04 A0
 			25 20 09 0A 06 03 04 A0

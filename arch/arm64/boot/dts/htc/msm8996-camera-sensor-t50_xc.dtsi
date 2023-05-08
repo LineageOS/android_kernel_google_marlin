@@ -78,7 +78,7 @@
         qcom,torch-source = <&pmi8994_torch0 &pmi8994_torch1>;
         qcom,switch-source = <&pmi8994_switch>;
     };
-    tlmm: pinctrl@01010000 {
+    tlmm: pinctrl@1010000 {
         cam_sensor_mclk0_active: cam_sensor_mclk0_active {
             /* MCLK0 */
             mux {

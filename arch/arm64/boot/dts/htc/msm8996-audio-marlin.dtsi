@@ -42,7 +42,7 @@
 /delete-node/ &dai_mi2s_quat;
 
 &soc {
-	tlmm: pinctrl@01010000 {
+	tlmm: pinctrl@1010000 {
 		pri_aux_pcm {
 			pri_aux_ftm: pri_aux_ftm {
 				mux {

@@ -54,7 +54,7 @@
 };
 
 &soc {
-	tlmm: pinctrl@01010000 {
+	tlmm: pinctrl@1010000 {
 		/* gpio8 */
 			/* 8 9 10 11 */
 			spi_10 {

@@ -78,6 +78,12 @@ source "drivers/nfc/nxp-nci/Kconfig"
 source "drivers/nfc/s3fwrn5/Kconfig"
 endmenu
 
+config NFC_PN551
+	tristate "PN551 NFC sensor support"
+	depends on I2C=y
+	help
+	  PN551 NFC Driver implemented.
+
 config NFC_NQ
 	tristate "QTI NCI based NFC Controller Driver for NQx"
 	depends on I2C

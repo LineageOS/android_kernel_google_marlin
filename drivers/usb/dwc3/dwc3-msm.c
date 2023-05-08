@@ -47,6 +47,7 @@
 #include <linux/extcon.h>
 #include <linux/reset.h>
 #include <soc/qcom/boot_stats.h>
+#include <linux/qpnp/pin.h>
 
 #include "power.h"
 #include "core.h"
@@ -278,6 +279,10 @@ struct dwc3_msm {
 	enum usb_device_speed override_usb_speed;
 
 	bool core_init_failed;
+	int                     redrive_3p0_c1;
+	int                     redrive_3p0_c2;
+	struct delayed_work	vbus_notify_work;
+	bool			pd_vbus_change;
 };
 
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
@@ -293,6 +298,8 @@ struct dwc3_msm {
 #define USB_SSPHY_1P8_HPM_LOAD		23000	/* uA */
 
 #define DSTS_CONNECTSPD_SS		0x4
+
+static struct dwc3_msm *context = NULL;
 
 
 static void dwc3_pwr_event_handler(struct dwc3_msm *mdwc);
@@ -2390,6 +2397,10 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 	return 0;
 }
 
+extern bool IsPRSwap;
+extern bool PolicyIsDFP;
+static bool dwc3_vbus_boost_enabled(void);
+
 /**
  * dwc3_ext_event_notify - callback to handle events from external transceiver
  *
@@ -2408,7 +2419,7 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 		clear_bit(ID, &mdwc->inputs);
 	}
 
-	if (mdwc->vbus_active && !mdwc->in_restart) {
+	if ((mdwc->vbus_active || IsPRSwap || (!PolicyIsDFP && dwc3_vbus_boost_enabled())) && !mdwc->in_restart) {
 		dev_dbg(mdwc->dev, "XCVR: BSV set\n");
 		set_bit(B_SESS_VLD, &mdwc->inputs);
 	} else {
@@ -3004,6 +3015,116 @@ static ssize_t usb_compliance_mode_store(struct device *dev,
 }
 static DEVICE_ATTR_RW(usb_compliance_mode);
 
+static bool dwc3_vbus_boost_enabled(void)
+{
+        struct dwc3_msm *mdwc = context;
+        struct dwc3 *dwc;
+        bool ret = false;
+
+        if (mdwc == NULL || mdwc->dwc3 == NULL)
+                return -ENODEV;
+
+        dwc = platform_get_drvdata(mdwc->dwc3);
+
+        if (!mdwc->vbus_reg) {
+                mdwc->vbus_reg = devm_regulator_get_optional(mdwc->dev,
+                                        "vbus_dwc3");
+                if (IS_ERR(mdwc->vbus_reg) &&
+                                PTR_ERR(mdwc->vbus_reg) == -EPROBE_DEFER) {
+                        /* regulators may not be ready, so retry again later */
+                        mdwc->vbus_reg = NULL;
+                        return -EPROBE_DEFER;
+                }
+        }
+
+	if (!IS_ERR(mdwc->vbus_reg)) {
+		ret = regulator_is_enabled(mdwc->vbus_reg);
+	}
+
+	return ret;
+}
+
+int dwc3_pd_vbus_ctrl(int on, bool isPRSwap)
+{
+	struct dwc3_msm *mdwc = context;
+	struct dwc3 *dwc;
+	int ret = 0;
+
+	if (mdwc == NULL || mdwc->dwc3 == NULL)
+		return -ENODEV;
+
+	dwc = platform_get_drvdata(mdwc->dwc3);
+
+	pr_debug("%s: on = %d, isPRSwap = %d\n", __func__, on, isPRSwap);
+	if (on == -1) {
+		mdwc->pd_vbus_change = 0;
+	} else {
+		mdwc->pd_vbus_change = isPRSwap ? 1 : 0;
+		pr_info("%s: set pd vbus flag to %d\n", __func__, mdwc->pd_vbus_change);
+	}
+
+	if (!mdwc->vbus_reg) {
+		mdwc->vbus_reg = devm_regulator_get_optional(mdwc->dev,
+					"vbus_dwc3");
+		if (IS_ERR(mdwc->vbus_reg) &&
+				PTR_ERR(mdwc->vbus_reg) == -EPROBE_DEFER) {
+			/* regulators may not be ready, so retry again later */
+			mdwc->vbus_reg = NULL;
+			return -EPROBE_DEFER;
+		}
+	}
+
+	if (on == 1) {
+		dev_dbg(mdwc->dev, "%s: turn on regulator\n", __func__);
+
+		if (!IS_ERR(mdwc->vbus_reg)) {
+			if (!regulator_is_enabled(mdwc->vbus_reg)) {
+				ret = regulator_enable(mdwc->vbus_reg);
+				pr_debug("%s: regulator_enable, ret = %d\n", __func__, ret);
+				if (ret) {
+					dev_err(dwc->dev, "unable to enable vbus_reg\n");
+					pr_err("%s: unable to enable vbus_reg\n", __func__);
+					return ret;
+				}
+			} else
+				pr_info("%s: regulator already enabled\n", __func__);
+		} else {
+			pr_err("%s: ERR: vbus_reg, err_code = %ld\n", __func__, PTR_ERR(mdwc->vbus_reg));
+			return -1;
+		}
+		pr_debug("%s: turn on vbus\n", __func__);
+	} else {
+		dev_dbg(dwc->dev, "%s: turn off regulator\n", __func__);
+
+		if (!IS_ERR(mdwc->vbus_reg) && regulator_is_enabled(mdwc->vbus_reg))
+			ret = regulator_disable(mdwc->vbus_reg);
+		if (ret) {
+			dev_err(dwc->dev, "unable to disable vbus_reg\n");
+			return ret;
+		}
+		pr_debug("%s: turn off Vbus\n", __func__);
+	}
+
+	return ret;
+}
+
+static void dwc3_notify_vbus_work(struct work_struct *w)
+{
+	struct dwc3_msm *mdwc = container_of(w, struct dwc3_msm, vbus_notify_work.work);
+	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+	pr_info("%s: pd_vbus_change = %d\n", __func__, mdwc->pd_vbus_change);
+	if (!mdwc->pd_vbus_change) {
+		if (dwc->is_drd && !mdwc->in_restart) {
+			pr_info("%s: maybe cable out or SINK first connect, resume state machine\n", __func__);
+			queue_work(mdwc->dwc3_wq, &mdwc->resume_work);
+		}
+	} else
+		pr_info("%s: during PR_SWAP, skip this PMIC event\n", __func__);
+
+	mdwc->pd_vbus_change = 0;
+}
+
 static int dwc3_msm_probe(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node, *dwc3_node;
@@ -3032,6 +3153,7 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, mdwc);
+	context = mdwc;
 	mdwc->dev = &pdev->dev;
 
 	INIT_LIST_HEAD(&mdwc->req_complete_list);
@@ -3042,6 +3164,7 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&mdwc->sm_work, dwc3_otg_sm_work);
 	INIT_DELAYED_WORK(&mdwc->perf_vote_work, msm_dwc3_perf_vote_work);
 	INIT_DELAYED_WORK(&mdwc->sdp_check, check_for_sdp_connection);
+	INIT_DELAYED_WORK(&mdwc->vbus_notify_work, dwc3_notify_vbus_work);
 
 	mdwc->sm_usb_wq = create_freezable_workqueue("k_sm_usb");
 	if (!mdwc->sm_usb_wq) {
@@ -3221,6 +3344,23 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 			}
 		}
 	}
+
+	mdwc->redrive_3p0_c1 = of_get_named_gpio(node,
+					"nxp,3p0_re-drive_c1", 0);
+
+	if (!gpio_is_valid(mdwc->redrive_3p0_c1)
+			|| devm_gpio_request(&pdev->dev, mdwc->redrive_3p0_c1,
+			"nxp,3p0_re-drive_c1"))
+		dev_err(&pdev->dev, "dwc3: fail to config mdwc->redrive_3p0_c1(%d)\n", mdwc->redrive_3p0_c1);
+
+	mdwc->redrive_3p0_c2 = of_get_named_gpio(node,
+					"nxp,3p0_re-drive_c2", 0);
+
+	if (!gpio_is_valid(mdwc->redrive_3p0_c2)
+			|| devm_gpio_request(&pdev->dev, mdwc->redrive_3p0_c2,
+			"nxp,3p0_re-drive_c2"))
+		dev_err(&pdev->dev, "dwc3: fail to config mdwc->redrive_3p0_c2(%d)\n", mdwc->redrive_3p0_c2);
+
 
 	ext_hub_reset_gpio = of_get_named_gpio(node,
 					"qcom,ext-hub-reset-gpio", 0);
@@ -3628,6 +3768,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		usb_phy_notify_connect(mdwc->hs_phy, USB_SPEED_HIGH);
 		dbg_event(0xFF, "StrtHost gync",
 			atomic_read(&mdwc->dev->power.usage_count));
+#if 0
 		if (!IS_ERR(mdwc->vbus_reg))
 			ret = regulator_enable(mdwc->vbus_reg);
 		if (ret) {
@@ -3639,6 +3780,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 				atomic_read(&mdwc->dev->power.usage_count));
 			return ret;
 		}
+#endif
 
 		dwc3_set_mode(dwc, DWC3_GCTL_PRTCAP_HOST);
 
@@ -3720,12 +3862,14 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		dev_dbg(mdwc->dev, "%s: turn off host\n", __func__);
 
 		usb_unregister_atomic_notify(&mdwc->usbdev_nb);
+#if 0
 		if (!IS_ERR(mdwc->vbus_reg))
 			ret = regulator_disable(mdwc->vbus_reg);
 		if (ret) {
 			dev_err(mdwc->dev, "unable to disable vbus_reg\n");
 			return ret;
 		}
+#endif 
 
 		cancel_delayed_work_sync(&mdwc->perf_vote_work);
 		msm_dwc3_perf_vote_update(mdwc, false);
@@ -4169,6 +4313,67 @@ static int dwc3_msm_pm_prepare(struct device *dev)
 }
 
 #ifdef CONFIG_PM_SLEEP
+
+static int redrive_ic_suspend(struct dwc3_msm *mdwc)
+{
+	int ret = 0;
+	struct qpnp_pin_cfg qpc;
+
+	qpc.mode = QPNP_PIN_MODE_DIG_OUT;
+	qpc.output_type = QPNP_PIN_OUT_BUF_CMOS;
+	qpc.invert = QPNP_PIN_INVERT_DISABLE;
+	qpc.pull = QPNP_PIN_GPIO_PULL_DN;
+	qpc.vin_sel = QPNP_PIN_VIN2;
+	qpc.out_strength = QPNP_PIN_OUT_STRENGTH_LOW;
+	qpc.src_sel = QPNP_PIN_SEL_FUNC_CONSTANT;
+	qpc.master_en = QPNP_PIN_MASTER_ENABLE;
+	qpc.aout_ref = 0;
+	qpc.ain_route = 0;
+	qpc.cs_out = 0;
+	qpc.apass_sel = 0;
+	qpc.dtest_sel = 1;
+
+	// pull low c1 to enter deep power-saving mode
+	ret = qpnp_pin_config(mdwc->redrive_3p0_c1, &qpc);
+
+	pr_debug("dwc3 suspend config re-drive ic, result = %d\n", ret);
+
+	return ret;
+}
+
+static int redrive_ic_resume(struct dwc3_msm *mdwc)
+{
+	int ret = 0;
+	struct qpnp_pin_cfg qpc;
+
+	qpc.mode = QPNP_PIN_MODE_DIG_OUT;
+	qpc.output_type = QPNP_PIN_OUT_BUF_CMOS;
+	qpc.invert = QPNP_PIN_INVERT_ENABLE;
+	qpc.pull = QPNP_PIN_GPIO_PULL_NO;
+	qpc.vin_sel = QPNP_PIN_VIN2;
+	qpc.out_strength = QPNP_PIN_OUT_STRENGTH_LOW;
+	qpc.src_sel = QPNP_PIN_SEL_FUNC_CONSTANT;
+	qpc.master_en = QPNP_PIN_MASTER_ENABLE;
+	qpc.aout_ref = 0;
+	qpc.ain_route = 0;
+	qpc.cs_out = 0;
+	qpc.apass_sel = 0;
+	qpc.dtest_sel = 1;
+
+	// pull high to exit deep power-saving mode
+	ret = qpnp_pin_config(mdwc->redrive_3p0_c1, &qpc);
+	if (ret)
+		pr_err("%s: fail to exit deep power-saving mode\n", __func__);
+
+	// config c1 as high-Z
+	qpc.master_en = QPNP_PIN_MASTER_DISABLE;
+	ret = qpnp_pin_config(mdwc->redrive_3p0_c1, &qpc);
+
+	pr_debug("dwc3 resume config re-drive ic, result = %d\n", ret);
+
+	return ret;
+}
+
 static int dwc3_msm_pm_suspend(struct device *dev)
 {
 	int ret = 0;
@@ -4183,6 +4388,10 @@ static int dwc3_msm_pm_suspend(struct device *dev)
 		dev_err(mdwc->dev, "Abort PM suspend!! (USB is outside LPM)\n");
 		return -EBUSY;
 	}
+
+	ret = redrive_ic_suspend(mdwc);
+	if (ret)
+		dev_err(dev, "re-drive ic suspend fail\n");
 
 	ret = dwc3_msm_suspend(mdwc, false);
 	if (ret)
@@ -4232,10 +4441,15 @@ static int dwc3_msm_pm_freeze(struct device *dev)
 static int dwc3_msm_pm_resume(struct device *dev)
 {
 	struct dwc3_msm *mdwc = dev_get_drvdata(dev);
+	int ret;
 
 	dev_dbg(dev, "dwc3-msm PM resume\n");
 
 	dbg_event(0xFF, "PM Res", 0);
+
+	ret = redrive_ic_resume(mdwc);
+	if (ret)
+		dev_err(dev, "re-drive ic resume fail\n");
 
 	/* flush to avoid race in read/write of pm_suspended */
 	flush_workqueue(mdwc->dwc3_wq);
@@ -4244,6 +4458,9 @@ static int dwc3_msm_pm_resume(struct device *dev)
 	/* Resume h/w in host mode as it may not be runtime suspended */
 	if (mdwc->no_wakeup_src_in_hostmode && !test_bit(ID, &mdwc->inputs))
 		dwc3_msm_resume(mdwc);
+	ret = redrive_ic_resume(mdwc);
+	if (ret)
+		dev_err(dev, "re-drive ic resume fail\n");
 
 	queue_work(mdwc->dwc3_wq, &mdwc->resume_work);
 

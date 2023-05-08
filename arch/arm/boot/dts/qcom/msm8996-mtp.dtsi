@@ -512,7 +512,7 @@
 };
 
 &usb3 {
-	extcon = <&pmi8994_charger>;
+	extcon = <&pmi8994_charger>, <&fusb_302>;
 	qcom,check-for-float;
 };
 

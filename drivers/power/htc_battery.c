@@ -159,6 +159,12 @@ enum {
 		printk(KERN_DEBUG"[BATT] " x); \
 } while (0)
 
+static inline void power_supply_set_current_limit(struct power_supply *psy, int limit)
+{
+	const union power_supply_propval ret = {limit,};
+	power_supply_set_property(psy, POWER_SUPPLY_PROP_CURRENT_MAX, &ret);
+}
+
 static bool need_to_check_cable(int type) {
 	return ((type == POWER_SUPPLY_TYPE_USB_DCP) ||
 		(type == POWER_SUPPLY_TYPE_USB_ACA) ||

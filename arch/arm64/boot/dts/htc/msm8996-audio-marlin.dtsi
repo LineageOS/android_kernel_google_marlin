@@ -307,6 +307,7 @@
 		/delete-property/ qcom,wsa-max-devs;
 		/delete-property/ qcom,wsa-devs;
 		/delete-property/ qcom,wsa-aux-dev-prefix;
+		/delete-property/ qcom,tdm-audio-intf;
 	};
 
 	i2c@75b5000 {

@@ -1198,6 +1198,10 @@ int oem_activate_service(void *hdd_ctx)
 	register_cld_cmd_cb(WLAN_NL_MSG_OEM, oem_cmd_handler, NULL);
 	return 0;
 }
+void oem_deactivate_service(void)
+{
+	deregister_cld_cmd_cb(WLAN_NL_MSG_OEM);
+}
 #else
 /*
  * Callback function invoked by Netlink service for all netlink

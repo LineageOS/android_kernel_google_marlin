@@ -181,7 +181,7 @@
 /*
  * total number of descriptors to use in the target
  */
-#define CFG_TGT_NUM_MSDU_DESC    (2048 + 32)
+#define CFG_TGT_NUM_MSDU_DESC    (1024 + 32)
 
 /*
  * Maximum number of frag table entries

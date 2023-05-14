@@ -1155,7 +1155,7 @@ static void oem_cmd_handler(const void *data, int data_len, void *ctx, int pid)
 	 * audit note: it is ok to pass a NULL policy here since only
 	 * one attribute is parsed and it is explicitly validated
 	 */
-	if (nla_parse(tb, CLD80211_ATTR_MAX, data, data_len, NULL)) {
+	if (wlan_cfg80211_nla_parse(tb, CLD80211_ATTR_MAX, data, data_len, NULL)) {
 		hddLog(LOGE, FL("Invalid ATTR"));
 		return;
 	}

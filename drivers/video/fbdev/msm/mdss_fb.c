@@ -5356,6 +5356,9 @@ void mdss_fb_calc_fps(struct msm_fb_data_type *mfd)
 
 void mdss_fb_idle_pc(struct msm_fb_data_type *mfd)
 {
+	if(!mfd)
+		return;
+
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
 
 	if (mdss_fb_is_power_off(mfd))

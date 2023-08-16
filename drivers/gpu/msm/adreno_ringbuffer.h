@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2016,2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -119,7 +119,7 @@ struct adreno_ringbuffer {
 	struct adreno_context *drawctxt_active;
 	struct kgsl_memdesc preemption_desc;
 	struct kgsl_memdesc pagetable_desc;
-	struct adreno_dispatcher_drawqueue dispatch_q;
+	struct adreno_dispatcher_cmdqueue dispatch_q;
 	wait_queue_head_t ts_expire_waitq;
 	unsigned int wptr_preempt_end;
 	unsigned int gpr11;
@@ -127,18 +127,6 @@ struct adreno_ringbuffer {
 	unsigned long sched_timer;
 	enum adreno_dispatcher_starve_timer_states starve_timer_state;
 	spinlock_t preempt_lock;
-	/**
-	 * @profile_desc: global memory to construct IB1s to do user side
-	 * profiling
-	 */
-	struct kgsl_memdesc profile_desc;
-	/**
-	 * @profile_index: Pointer to the next "slot" in profile_desc for a user
-	 * profiling IB1.  This allows for PAGE_SIZE / 16 = 256 simultaneous
-	 * commands per ringbuffer with user profiling enabled
-	 * enough.
-	 */
-	u32 profile_index;
 };
 
 /* Returns the current ringbuffer */
@@ -148,11 +136,11 @@ int cp_secure_mode(struct adreno_device *adreno_dev, uint *cmds, int set);
 
 int adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 				struct kgsl_context *context,
-				struct kgsl_drawobj *drawobj,
+				struct kgsl_cmdbatch *cmdbatch,
 				uint32_t *timestamp);
 
 int adreno_ringbuffer_submitcmd(struct adreno_device *adreno_dev,
-		struct kgsl_drawobj_cmd *cmdobj,
+		struct kgsl_cmdbatch *cmdbatch,
 		struct adreno_submit_time *time);
 
 int adreno_ringbuffer_probe(struct adreno_device *adreno_dev, bool nopreempt);

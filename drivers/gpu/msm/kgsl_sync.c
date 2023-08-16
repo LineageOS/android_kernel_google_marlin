@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,6 +13,7 @@
 
 #include <linux/err.h>
 #include <linux/file.h>
+#include "oneshot_sync.h"
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
@@ -179,7 +180,7 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 		goto out;
 	}
 	snprintf(fence_name, sizeof(fence_name),
-		"%s-pid-%d-ctx-%d-ts-%u",
+		"%s-pid-%d-ctx-%d-ts-%d",
 		device->name, current->group_leader->pid,
 		context_id, timestamp);
 
@@ -431,8 +432,6 @@ int kgsl_sync_fence_async_cancel(struct kgsl_sync_fence_waiter *kwaiter)
 }
 
 #ifdef CONFIG_ONESHOT_SYNC
-
-#include "oneshot_sync.h"
 
 struct kgsl_syncsource {
 	struct kref refcount;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2016, 2018,2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -77,6 +77,18 @@
  */
 #define SIZE_PIPE_ENTRY(cnt) (50 + (cnt) * 62)
 #define SIZE_LOG_ENTRY(cnt) (6 + (cnt) * 5)
+
+static struct adreno_context_type ctxt_type_table[] = {KGSL_CONTEXT_TYPES};
+
+static const char *get_api_type_str(unsigned int type)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(ctxt_type_table) - 1; i++) {
+		if (ctxt_type_table[i].type == type)
+			return ctxt_type_table[i].str;
+	}
+	return "UNKNOWN";
+}
 
 static inline uint _ib_start(struct adreno_device *adreno_dev,
 			 unsigned int *cmds)
@@ -168,7 +180,7 @@ static int _build_pre_ib_cmds(struct adreno_device *adreno_dev,
 	ibcmds += _ib_cmd_mem_write(adreno_dev, ibcmds, gpuaddr + data_offset,
 			drawctxt->base.id, &data_offset);
 	ibcmds += _ib_cmd_mem_write(adreno_dev, ibcmds, gpuaddr + data_offset,
-			pid_nr(drawctxt->base.proc_priv->pid), &data_offset);
+			drawctxt->base.proc_priv->pid, &data_offset);
 	ibcmds += _ib_cmd_mem_write(adreno_dev, ibcmds, gpuaddr + data_offset,
 			drawctxt->base.tid, &data_offset);
 	ibcmds += _ib_cmd_mem_write(adreno_dev, ibcmds, gpuaddr + data_offset,
@@ -1059,8 +1071,7 @@ void adreno_profile_init(struct adreno_device *adreno_dev)
 	/* allocate shared_buffer, which includes pre_ib and post_ib */
 	profile->shared_size = ADRENO_PROFILE_SHARED_BUF_SIZE_DWORDS;
 	ret = kgsl_allocate_global(device, &profile->shared_buffer,
-			profile->shared_size * sizeof(unsigned int),
-			0, 0, "profile");
+			profile->shared_size * sizeof(unsigned int), 0, 0);
 
 	if (ret) {
 		profile->shared_size = 0;

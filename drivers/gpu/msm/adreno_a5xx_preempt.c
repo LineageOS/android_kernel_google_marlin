@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2017,2021, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,7 +22,7 @@
 #define PREEMPT_SMMU_RECORD(_field) \
 		offsetof(struct a5xx_cp_smmu_info, _field)
 
-static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer)
+static void _update_wptr(struct adreno_device *adreno_dev)
 {
 	struct adreno_ringbuffer *rb = adreno_dev->cur_rb;
 	unsigned int wptr;
@@ -35,16 +35,10 @@ static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer)
 	if (wptr != rb->wptr) {
 		adreno_writereg(adreno_dev, ADRENO_REG_CP_RB_WPTR,
 			rb->wptr);
-		/*
-		 * In case something got submitted while preemption was on
-		 * going, reset the timer.
-		 */
-		reset_timer = 1;
-	}
 
-	if (reset_timer)
 		rb->dispatch_q.expires = jiffies +
-			msecs_to_jiffies(adreno_drawobj_timeout);
+			msecs_to_jiffies(adreno_cmdbatch_timeout);
+	}
 
 	spin_unlock_irqrestore(&rb->preempt_lock, flags);
 }
@@ -96,7 +90,7 @@ static void _a5xx_preemption_done(struct adreno_device *adreno_dev)
 	adreno_dev->next_rb = NULL;
 
 	/* Update the wptr for the new command queue */
-	_update_wptr(adreno_dev, true);
+	_update_wptr(adreno_dev);
 
 	/* Update the dispatcher timer for the new command queue */
 	mod_timer(&adreno_dev->dispatcher.timer,
@@ -219,7 +213,7 @@ void a5xx_preemption_trigger(struct adreno_device *adreno_dev)
 		 */
 
 		if (next != NULL) {
-			_update_wptr(adreno_dev, false);
+			_update_wptr(adreno_dev);
 
 			mod_timer(&adreno_dev->dispatcher.timer,
 				adreno_dev->cur_rb->dispatch_q.expires);
@@ -310,7 +304,7 @@ void a5xx_preempt_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_dev->next_rb = NULL;
 
 	/* Update the wptr if it changed while preemption was ongoing */
-	_update_wptr(adreno_dev, true);
+	_update_wptr(adreno_dev);
 
 	/* Update the dispatcher timer for the new command queue */
 	mod_timer(&adreno_dev->dispatcher.timer,
@@ -407,8 +401,7 @@ unsigned int a5xx_preemption_pre_ibsubmit(
 
 	/* Enable CP_CONTEXT_SWITCH_YIELD packets in the IB2s */
 	*cmds++ = cp_type7_packet(CP_YIELD_ENABLE, 1);
-	*cmds++ = ((preempt_style == KGSL_CONTEXT_PREEMPT_STYLE_RINGBUFFER)
-				? 0 : 2);
+	*cmds++ = 2;
 
 	return (unsigned int) (cmds - cmds_orig);
 }
@@ -499,8 +492,7 @@ static int a5xx_preemption_ringbuffer_init(struct adreno_device *adreno_dev,
 	int ret;
 
 	ret = kgsl_allocate_global(device, &rb->preemption_desc,
-		A5XX_CP_CTXRECORD_SIZE_IN_BYTES, 0, KGSL_MEMDESC_PRIVILEGED,
-		"preemption_desc");
+		A5XX_CP_CTXRECORD_SIZE_IN_BYTES, 0, KGSL_MEMDESC_PRIVILEGED);
 	if (ret)
 		return ret;
 
@@ -535,44 +527,14 @@ static int a5xx_preemption_iommu_init(struct adreno_device *adreno_dev)
 
 	/* Allocate mem for storing preemption smmu record */
 	return kgsl_allocate_global(device, &iommu->smmu_info, PAGE_SIZE,
-		KGSL_MEMFLAGS_GPUREADONLY, KGSL_MEMDESC_PRIVILEGED,
-		"smmu_info");
+		KGSL_MEMFLAGS_GPUREADONLY, KGSL_MEMDESC_PRIVILEGED);
 }
-
-static void a5xx_preemption_iommu_close(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_iommu *iommu = KGSL_IOMMU_PRIV(device);
-
-	kgsl_free_global(device, &iommu->smmu_info);
-}
-
 #else
 static int a5xx_preemption_iommu_init(struct adreno_device *adreno_dev)
 {
 	return -ENODEV;
 }
-
-static void a5xx_preemption_iommu_close(struct adreno_device *adreno_dev)
-{
-}
 #endif
-
-static void a5xx_preemption_close(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct adreno_preemption *preempt = &adreno_dev->preempt;
-	struct adreno_ringbuffer *rb;
-	unsigned int i;
-
-	del_timer(&preempt->timer);
-	kgsl_free_global(device, &preempt->counters);
-	a5xx_preemption_iommu_close(adreno_dev);
-
-	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
-		kgsl_free_global(device, &rb->preemption_desc);
-	}
-}
 
 int a5xx_preemption_init(struct adreno_device *adreno_dev)
 {
@@ -595,10 +557,9 @@ int a5xx_preemption_init(struct adreno_device *adreno_dev)
 	/* Allocate mem for storing preemption counters */
 	ret = kgsl_allocate_global(device, &preempt->counters,
 		adreno_dev->num_ringbuffers *
-		A5XX_CP_CTXRECORD_PREEMPTION_COUNTER_SIZE, 0, 0,
-		"preemption_counters");
+		A5XX_CP_CTXRECORD_PREEMPTION_COUNTER_SIZE, 0, 0);
 	if (ret)
-		goto err;
+		return ret;
 
 	addr = preempt->counters.gpuaddr;
 
@@ -606,16 +567,10 @@ int a5xx_preemption_init(struct adreno_device *adreno_dev)
 	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
 		ret = a5xx_preemption_ringbuffer_init(adreno_dev, rb, addr);
 		if (ret)
-			goto err;
+			return ret;
 
 		addr += A5XX_CP_CTXRECORD_PREEMPTION_COUNTER_SIZE;
 	}
 
-	ret = a5xx_preemption_iommu_init(adreno_dev);
-
-err:
-	if (ret)
-		a5xx_preemption_close(device);
-
-	return ret;
+	return a5xx_preemption_iommu_init(adreno_dev);
 }

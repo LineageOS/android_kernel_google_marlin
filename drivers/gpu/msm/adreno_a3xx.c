@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -151,43 +151,6 @@ static const unsigned int _a3xx_pwron_fixup_fs_instructions[] = {
 	0x00000000, 0x03000000, 0x00000000, 0x00000000,
 };
 
-static void a3xx_efuse_speed_bin(struct adreno_device *adreno_dev)
-{
-	unsigned int val;
-	unsigned int speed_bin[3];
-	struct kgsl_device *device = &adreno_dev->dev;
-
-	if (of_property_read_u32_array(device->pdev->dev.of_node,
-		"qcom,gpu-speed-bin", speed_bin, 3))
-		return;
-
-	adreno_efuse_read_u32(adreno_dev, speed_bin[0], &val);
-
-	adreno_dev->speed_bin = (val & speed_bin[1]) >> speed_bin[2];
-}
-
-static const struct {
-	int (*check)(struct adreno_device *adreno_dev);
-	void (*func)(struct adreno_device *adreno_dev);
-} a3xx_efuse_funcs[] = {
-	{ adreno_is_a306a, a3xx_efuse_speed_bin },
-};
-
-static void a3xx_check_features(struct adreno_device *adreno_dev)
-{
-	unsigned int i;
-
-	if (adreno_efuse_map(adreno_dev))
-		return;
-
-	for (i = 0; i < ARRAY_SIZE(a3xx_efuse_funcs); i++) {
-		if (a3xx_efuse_funcs[i].check(adreno_dev))
-			a3xx_efuse_funcs[i].func(adreno_dev);
-	}
-
-	adreno_efuse_unmap(adreno_dev);
-}
-
 /**
  * _a3xx_pwron_fixup() - Initialize a special command buffer to run a
  * post-power collapse shader workaround
@@ -211,7 +174,7 @@ static int _a3xx_pwron_fixup(struct adreno_device *adreno_dev)
 
 	ret = kgsl_allocate_global(KGSL_DEVICE(adreno_dev),
 		&adreno_dev->pwron_fixup, PAGE_SIZE,
-		KGSL_MEMFLAGS_GPUREADONLY, 0, "pwron_fixup");
+		KGSL_MEMFLAGS_GPUREADONLY, 0);
 
 	if (ret)
 		return ret;
@@ -641,9 +604,6 @@ static void a3xx_platform_setup(struct adreno_device *adreno_dev)
 		gpudev->vbif_xin_halt_ctrl0_mask =
 				A30X_VBIF_XIN_HALT_CTRL0_MASK;
 	}
-
-	/* Check efuse bits for various capabilties */
-	a3xx_check_features(adreno_dev);
 }
 
 static int a3xx_send_me_init(struct adreno_device *adreno_dev,
@@ -1465,10 +1425,6 @@ static struct adreno_coresight a3xx_coresight = {
 	.groups = a3xx_coresight_groups,
 };
 
-static unsigned int a3xx_int_bits[ADRENO_INT_BITS_MAX] = {
-	ADRENO_INT_DEFINE(ADRENO_INT_RBBM_AHB_ERROR, A3XX_INT_RBBM_AHB_ERROR),
-};
-
 /* Register offset defines for A3XX */
 static unsigned int a3xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_ME_RAM_WADDR, A3XX_CP_ME_RAM_WADDR),
@@ -1530,10 +1486,6 @@ static unsigned int a3xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 			A3XX_UCHE_CACHE_INVALIDATE0_REG),
 	ADRENO_REG_DEFINE(ADRENO_REG_UCHE_INVALIDATE1,
 			A3XX_UCHE_CACHE_INVALIDATE1_REG),
-	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_PERFCTR_RBBM_0_LO,
-			A3XX_RBBM_PERFCTR_RBBM_0_LO),
-	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_PERFCTR_RBBM_0_HI,
-			A3XX_RBBM_PERFCTR_RBBM_0_HI),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_PERFCTR_LOAD_VALUE_LO,
 				A3XX_RBBM_PERFCTR_LOAD_VALUE_LO),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_PERFCTR_LOAD_VALUE_HI,
@@ -1901,7 +1853,6 @@ int a3xx_microcode_load(struct adreno_device *adreno_dev,
 
 struct adreno_gpudev adreno_a3xx_gpudev = {
 	.reg_offsets = &a3xx_reg_offsets,
-	.int_bits = a3xx_int_bits,
 	.ft_perf_counters = a3xx_ft_perf_counters,
 	.ft_perf_counters_count = ARRAY_SIZE(a3xx_ft_perf_counters),
 	.perfcounters = &a3xx_perfcounters,

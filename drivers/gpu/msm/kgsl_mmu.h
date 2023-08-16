@@ -1,5 +1,4 @@
 /* Copyright (c) 2002,2007-2017, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -76,13 +75,11 @@ struct kgsl_mmu_ops {
 			(struct kgsl_mmu *mmu);
 	int (*mmu_init_pt)(struct kgsl_mmu *mmu, struct kgsl_pagetable *);
 	void (*mmu_add_global)(struct kgsl_mmu *mmu,
-			struct kgsl_memdesc *memdesc, const char *name);
+			struct kgsl_memdesc *memdesc);
 	void (*mmu_remove_global)(struct kgsl_mmu *mmu,
 			struct kgsl_memdesc *memdesc);
 	struct kgsl_pagetable * (*mmu_getpagetable)(struct kgsl_mmu *mmu,
 			unsigned long name);
-	struct kgsl_memdesc* (*mmu_get_qdss_global_entry)(void);
-	struct kgsl_memdesc* (*mmu_get_qtimer_global_entry)(void);
 };
 
 struct kgsl_mmu_pt_ops {
@@ -100,8 +97,7 @@ struct kgsl_mmu_pt_ops {
 	int (*set_svm_region)(struct kgsl_pagetable *, uint64_t, uint64_t);
 	int (*svm_range)(struct kgsl_pagetable *, uint64_t *, uint64_t *,
 			uint64_t);
-	bool (*addr_in_range)(struct kgsl_pagetable *pagetable,
-			uint64_t, uint64_t);
+	bool (*addr_in_range)(struct kgsl_pagetable *pagetable, uint64_t);
 	int (*mmu_map_offset)(struct kgsl_pagetable *pt,
 			uint64_t virtaddr, uint64_t virtoffset,
 			struct kgsl_memdesc *memdesc, uint64_t physoffset,
@@ -109,9 +105,6 @@ struct kgsl_mmu_pt_ops {
 	int (*mmu_unmap_offset)(struct kgsl_pagetable *pt,
 			struct kgsl_memdesc *memdesc, uint64_t addr,
 			uint64_t offset, uint64_t size);
-	int (*mmu_sparse_dummy_map)(struct kgsl_pagetable *pt,
-			struct kgsl_memdesc *memdesc, uint64_t offset,
-			uint64_t size);
 };
 
 /*
@@ -133,6 +126,8 @@ struct kgsl_mmu_pt_ops {
 #define KGSL_MMU_FORCE_32BIT BIT(5)
 /* 64 bit address is live */
 #define KGSL_MMU_64BIT BIT(6)
+/* MMU can do coherent hardware table walks */
+#define KGSL_MMU_COHERENT_HTW BIT(7)
 /* The MMU supports non-contigious pages */
 #define KGSL_MMU_PAGED BIT(8)
 /* The device requires a guard page */
@@ -175,7 +170,6 @@ struct kgsl_pagetable *kgsl_mmu_getpagetable_ptbase(struct kgsl_mmu *,
 
 void kgsl_add_global_secure_entry(struct kgsl_device *device,
 					struct kgsl_memdesc *memdesc);
-void kgsl_print_global_pt_entries(struct seq_file *s);
 void kgsl_mmu_putpagetable(struct kgsl_pagetable *pagetable);
 
 int kgsl_mmu_get_gpuaddr(struct kgsl_pagetable *pagetable,
@@ -189,8 +183,7 @@ unsigned int kgsl_virtaddr_to_physaddr(void *virtaddr);
 unsigned int kgsl_mmu_log_fault_addr(struct kgsl_mmu *mmu,
 		u64 ttbr0, uint64_t addr);
 enum kgsl_mmutype kgsl_mmu_get_mmutype(struct kgsl_device *device);
-bool kgsl_mmu_gpuaddr_in_range(struct kgsl_pagetable *pt, uint64_t gpuaddr,
-		uint64_t size);
+bool kgsl_mmu_gpuaddr_in_range(struct kgsl_pagetable *pt, uint64_t gpuaddr);
 
 int kgsl_mmu_get_region(struct kgsl_pagetable *pagetable,
 		uint64_t gpuaddr, uint64_t size);
@@ -200,7 +193,7 @@ int kgsl_mmu_find_region(struct kgsl_pagetable *pagetable,
 		uint64_t *gpuaddr, uint64_t size, unsigned int align);
 
 void kgsl_mmu_add_global(struct kgsl_device *device,
-	struct kgsl_memdesc *memdesc, const char *name);
+	struct kgsl_memdesc *memdesc);
 void kgsl_mmu_remove_global(struct kgsl_device *device,
 		struct kgsl_memdesc *memdesc);
 
@@ -232,14 +225,6 @@ int kgsl_mmu_map_offset(struct kgsl_pagetable *pagetable,
 int kgsl_mmu_unmap_offset(struct kgsl_pagetable *pagetable,
 		struct kgsl_memdesc *memdesc, uint64_t addr, uint64_t offset,
 		uint64_t size);
-
-struct kgsl_memdesc *kgsl_mmu_get_qdss_global_entry(struct kgsl_device *device);
-
-struct kgsl_memdesc *kgsl_mmu_get_qtimer_global_entry(
-		struct kgsl_device *device);
-
-int kgsl_mmu_sparse_dummy_map(struct kgsl_pagetable *pagetable,
-		struct kgsl_memdesc *memdesc, uint64_t offset, uint64_t size);
 
 /*
  * Static inline functions of MMU that simply call the SMMU specific
@@ -391,7 +376,7 @@ kgsl_mmu_pagetable_get_contextidr(struct kgsl_pagetable *pagetable)
 	return 0;
 }
 
-#ifdef CONFIG_QCOM_IOMMU
+#ifdef CONFIG_MSM_IOMMU
 #include <linux/qcom_iommu.h>
 #ifndef CONFIG_ARM_SMMU
 static inline bool kgsl_mmu_bus_secured(struct device *dev)

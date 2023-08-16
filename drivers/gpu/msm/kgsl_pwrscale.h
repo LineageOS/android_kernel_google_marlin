@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -122,11 +122,8 @@ void kgsl_pwrscale_busy(struct kgsl_device *device);
 void kgsl_pwrscale_sleep(struct kgsl_device *device);
 void kgsl_pwrscale_wake(struct kgsl_device *device);
 
-void kgsl_pwrscale_midframe_timer_restart(struct kgsl_device *device);
-void kgsl_pwrscale_midframe_timer_cancel(struct kgsl_device *device);
-
 void kgsl_pwrscale_enable(struct kgsl_device *device);
-void kgsl_pwrscale_disable(struct kgsl_device *device, bool turbo);
+void kgsl_pwrscale_disable(struct kgsl_device *device);
 
 int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags);
 int kgsl_devfreq_get_dev_status(struct device *, struct devfreq_dev_status *);

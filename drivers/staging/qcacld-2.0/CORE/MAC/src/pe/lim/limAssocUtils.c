@@ -5020,6 +5020,7 @@ void limInitPreAuthTimerTable(tpAniSirGlobal pMac, tpLimPreAuthTable pPreAuthTim
         }
         pAuthNode[authNodeIdx]->authNodeIdx = (tANI_U8)authNodeIdx;
         pAuthNode[authNodeIdx]->fFree = 1;
+        pAuthNode[authNodeIdx]->assoc_req.present = false;
     }
 }
 

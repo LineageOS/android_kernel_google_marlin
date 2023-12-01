@@ -307,7 +307,7 @@ int ptt_sock_activate_svc(void *hdd_ctx)
 	return 0;
 }
 
-void ptt_sock_deactivate_svc()
+void ptt_sock_deactivate_svc(void)
 {
 }
 

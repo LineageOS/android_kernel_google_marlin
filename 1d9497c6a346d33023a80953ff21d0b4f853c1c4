@@ -34,6 +34,24 @@
       "parentUuid": "3931d74f_dd62ecb1",
       "revId": "1d9497c6a346d33023a80953ff21d0b4f853c1c4",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "78ae6269_2a0d7228",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 33257
+      },
+      "writtenOn": "2023-12-09T06:39:07Z",
+      "side": 1,
+      "message": "I tested on my devices (marlin + sailfish) with two separate Ethernet adapters with the RTL8152 chips. One with a built-in USB hub and USB C connector, and the other with a USB A connector paired to a USB C adapter. Both devices were able to connect to the internet through the Ethernet adapters.\n\nI\u0027m not sure if I\u0027m supposed to be the one doing to V+1 or CR+1\n\nhttps://i.imgur.com/j1MD5HR.png",
+      "parentUuid": "722a3969_c93288ef",
+      "revId": "1d9497c6a346d33023a80953ff21d0b4f853c1c4",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }

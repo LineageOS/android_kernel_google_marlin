@@ -21,6 +21,11 @@
 					09 0A 0B 0C 0D 0E 0F 10
 					11 12 13 14 15 16 17 18];
 				linux,default-trigger = "none";
+				qcom,lut-flags = <25>;
+				qcom,pause-lo = <500>;
+				qcom,pause-hi = <500>;
+				qcom,ramp-step-ms = <100>;
+				qcom,use-blink;
 			};
 
 			qcom,rgb_1 {
@@ -31,6 +36,11 @@
 					09 0A 0B 0C 0D 0E 0F 10
 					11 12 13 14 15 16 17 18];
 				linux,default-trigger = "none";
+				qcom,lut-flags = <25>;
+				qcom,pause-lo = <500>;
+				qcom,pause-hi = <500>;
+				qcom,ramp-step-ms = <100>;
+				qcom,use-blink;
 			};
 
 			qcom,rgb_2 {
@@ -41,6 +51,11 @@
 					09 0A 0B 0C 0D 0E 0F 10
 					11 12 13 14 15 16 17 18];
 				linux,default-trigger = "none";
+				qcom,lut-flags = <25>;
+				qcom,pause-lo = <500>;
+				qcom,pause-hi = <500>;
+				qcom,ramp-step-ms = <100>;
+				qcom,use-blink;
 			};
         };
 	};

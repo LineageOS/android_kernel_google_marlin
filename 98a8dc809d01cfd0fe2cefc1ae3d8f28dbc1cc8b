@@ -16,6 +16,23 @@
       "message": "can\u0027t we just set the config?",
       "revId": "98a8dc809d01cfd0fe2cefc1ae3d8f28dbc1cc8b",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8d313585_d27e2794",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 16185
+      },
+      "writtenOn": "2026-03-23T17:03:17Z",
+      "side": 1,
+      "message": "eh, this device is dead and qcac2.0 even more dead. Wiring it up properly is more effort than worth.\n\nPlus we actually don\u0027t want all of FEATURE_SAE, just this component.",
+      "revId": "98a8dc809d01cfd0fe2cefc1ae3d8f28dbc1cc8b",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }

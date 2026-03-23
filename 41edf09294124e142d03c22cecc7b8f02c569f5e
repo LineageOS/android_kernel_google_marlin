@@ -16,6 +16,23 @@
       "message": "can\u0027t we just wire up the config?",
       "revId": "41edf09294124e142d03c22cecc7b8f02c569f5e",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3436e27e_0e443dad",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 16185
+      },
+      "writtenOn": "2026-03-23T17:02:56Z",
+      "side": 1,
+      "message": "eh, this device is dead and qcac2.0 even more dead. Wiring it up properly is more effort than worth.",
+      "revId": "41edf09294124e142d03c22cecc7b8f02c569f5e",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
